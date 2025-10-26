@@ -111,13 +111,14 @@ func formatAge(timestamp metav1.Time) string {
 
 	if duration < time.Minute {
 		return fmt.Sprintf("%ds", int(duration.Seconds()))
-	} else if duration < time.Hour {
-		return fmt.Sprintf("%dm", int(duration.Minutes()))
-	} else if duration < 24*time.Hour {
-		return fmt.Sprintf("%dh", int(duration.Hours()))
-	} else {
-		return fmt.Sprintf("%dd", int(duration.Hours()/24))
 	}
+	if duration < time.Hour {
+		return fmt.Sprintf("%dm", int(duration.Minutes()))
+	}
+	if duration < 24*time.Hour {
+		return fmt.Sprintf("%dh", int(duration.Hours()))
+	}
+	return fmt.Sprintf("%dd", int(duration.Hours()/24))
 }
 
 // GetStatusSymbol returns a visual indicator for pod status

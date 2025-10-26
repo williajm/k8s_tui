@@ -38,7 +38,7 @@ Kubernetes clusters. It provides real-time monitoring and navigation of your clu
 	}
 }
 
-func run(cmd *cobra.Command, args []string) error {
+func run(_ *cobra.Command, _ []string) error {
 	// Create Kubernetes client
 	client, err := k8s.NewClient(kubeconfigPath, contextName, namespace)
 	if err != nil {
