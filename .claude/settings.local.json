@@ -1,16 +1,7 @@
 {
   "permissions": {
     "allow": [
-      "Bash(go mod tidy:*)",
-      "Bash(where go:*)",
-      "Bash(mkdir:*)",
-      "Bash(go build:*)",
-      "Bash(make clean:*)",
-      "Bash(make build:*)",
-      "Bash(go test:*)",
-      "Bash(go tool cover:*)",
-      "Bash(git checkout:*)",
-      "Bash(git add:*)"
+      "Bash(git commit:*)"
     ],
     "deny": [],
     "ask": []

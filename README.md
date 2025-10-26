@@ -172,27 +172,11 @@ See [.github/workflows/ci.yml](.github/workflows/ci.yml) for details.
 
 ### Branch Protection
 
-The repository uses branch protection on `main` to ensure code quality:
-
-**Protected Branch Rules:**
+The `main` branch is protected with the following rules:
 - 🔒 Require pull requests before merging (0 approvals for solo dev)
 - ✅ Require status checks to pass (test, lint, build)
 - 📝 Require linear history (rebase/squash only)
 - 🚫 Prevent force pushes and branch deletion
-- ⚡ Admin bypass enabled for emergency hotfixes
-
-**Setup Instructions:**
-
-```bash
-# Using PowerShell (Windows)
-.\.github\scripts\setup-branch-protection.ps1
-
-# Using Bash (Linux/Mac)
-./.github/scripts/setup-branch-protection.sh
-
-# Or manually via GitHub UI
-# Settings → Branches → Add rule → Configure
-```
 
 **Development Workflow:**
 ```bash
@@ -205,7 +189,7 @@ git push origin feature/my-feature
 # Merge when checks pass
 ```
 
-See [.github/BRANCH_PROTECTION.md](.github/BRANCH_PROTECTION.md) for detailed configuration and workflows.
+See [.github/DEVELOPMENT_WORKFLOW.md](.github/DEVELOPMENT_WORKFLOW.md) for detailed workflows.
 
 ### Project Structure
 ```
