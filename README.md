@@ -1,5 +1,10 @@
 # K8S-TUI
 
+[![CI](https://github.com/williajm/k8s_tui/actions/workflows/ci.yml/badge.svg)](https://github.com/williajm/k8s_tui/actions/workflows/ci.yml)
+[![Go Report Card](https://goreportcard.com/badge/github.com/williajm/k8s_tui)](https://goreportcard.com/report/github.com/williajm/k8s_tui)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/williajm/k8s_tui)](https://github.com/williajm/k8s_tui)
+
 A fast, keyboard-driven terminal user interface for Kubernetes cluster management.
 
 ## Features
@@ -93,22 +98,22 @@ keybindings:              # Customize key bindings
 ## Screenshots
 
 ```
-┌─────────────────────────────────────────────────────┐
-│ K8S-TUI | Context: minikube | NS: default | ◉ Live  │
-├──────────────┬──────────────────────────────────────┤
-│ Resources    │ nginx-deployment-6799fc88d8-x2plm   │
-│              │                                      │
-│ ▾ Pods (3)   │ Status:  Running                    │
-│   nginx   ✓  │ Ready:   1/1                       │
-│   redis   ✓  │ Age:     2 days                    │
-│   postgres ⚠ │ IP:      10.244.0.15              │
-│              │                                      │
-│ ▸ Services   │ Containers:                         │
-│ ▸ Deployments│ └─ nginx (nginx:1.21)              │
-│              │    Restarts: 0                      │
-│              │    CPU:      10m                    │
-│              │    Memory:   128Mi                  │
-└──────────────┴──────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────┐
+│ K8S-TUI │ Context: minikube │ NS: default │ ◉ Connected          │
+├───────────────────┬──────────────────────────────────────────────┤
+│ Resources         │ nginx-deployment-6799fc88d8-x2plm            │
+│                   │                                              │
+│ ▾ Pods (3)        │ Status:     Running                          │
+│   nginx       ✓   │ Ready:      1/1                              │
+│   redis       ✓   │ Age:        2 days                           │
+│   postgres    ⚠   │ IP:         10.244.0.15                      │
+│                   │                                              │
+│ ▸ Services        │ Containers:                                  │
+│ ▸ Deployments     │ └─ nginx (nginx:1.21)                        │
+│                   │    Restarts:  0                              │
+│                   │    CPU:       10m                            │
+│                   │    Memory:    128Mi                          │
+└───────────────────┴──────────────────────────────────────────────┘
  [↑↓] Navigate  [Enter] Select  [/] Search  [q] Quit
 ```
 
