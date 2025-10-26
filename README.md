@@ -1,7 +1,7 @@
 # K8S-TUI
 
 [![CI](https://github.com/williajm/k8s_tui/actions/workflows/ci.yml/badge.svg)](https://github.com/williajm/k8s_tui/actions/workflows/ci.yml)
-[![Go Report Card](https://goreportcard.com/badge/github.com/williajm/k8s-tui)](https://goreportcard.com/report/github.com/williajm/k8s-tui)
+[![Go Report Card](https://goreportcard.com/badge/github.com/williajm/k8s_tui)](https://goreportcard.com/report/github.com/williajm/k8s_tui)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/williajm/k8s_tui)](https://github.com/williajm/k8s_tui)
 
