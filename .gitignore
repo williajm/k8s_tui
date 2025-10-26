@@ -61,3 +61,6 @@ tmp/
 # Virtual environments (from user instructions)
 .venv-win/
 .venv-wsl/
+
+# Claude Code settings (local only)
+.claude/
