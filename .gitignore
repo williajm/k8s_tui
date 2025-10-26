@@ -28,5 +28,36 @@ go.work.sum
 .env
 
 # Editor/IDE
-# .idea/
-# .vscode/
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Build directories
+build/
+dist/
+bin/
+
+# OS specific files
+.DS_Store
+Thumbs.db
+
+# Application specific
+k8s-tui
+k8s-tui-*
+
+# Configuration files with sensitive data
+kubeconfig
+*.pem
+*.key
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+tmp/
+
+# Virtual environments (from user instructions)
+.venv-win/
+.venv-wsl/

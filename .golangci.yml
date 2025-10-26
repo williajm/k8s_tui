@@ -1,0 +1,68 @@
+linters-settings:
+  dupl:
+    threshold: 100
+  funlen:
+    lines: 100
+    statements: 50
+  goconst:
+    min-len: 2
+    min-occurrences: 2
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - performance
+    disabled-checks:
+      - dupImport
+      - unnecessaryBlock
+      - hugeParam
+      - rangeValCopy
+      - ifElseChain
+  gocyclo:
+    min-complexity: 15
+  goimports:
+    local-prefixes: github.com/williajm/k8s-tui
+  govet:
+    enable-all: true
+  lll:
+    line-length: 140
+  misspell:
+    locale: US
+
+linters:
+  disable-all: true
+  enable:
+    - bodyclose
+    - dogsled
+    - dupl
+    - errcheck
+    - funlen
+    - gochecknoinits
+    - gocritic
+    - gocyclo
+    - gofmt
+    - goprintffuncname
+    - gosec
+    - gosimple
+    - ineffassign
+    - lll
+    - misspell
+    - nakedret
+    - nolintlint
+    - revive
+    - staticcheck
+    - stylecheck
+    - typecheck
+    - unconvert
+    - unparam
+    - unused
+    - whitespace
+
+issues:
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - funlen
+        - dupl
+
+run:
+  timeout: 5m
