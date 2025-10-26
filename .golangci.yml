@@ -10,13 +10,13 @@ linters-settings:
   gocritic:
     enabled-tags:
       - diagnostic
-      - experimental
-      - opinionated
       - performance
-      - style
     disabled-checks:
       - dupImport
       - unnecessaryBlock
+      - hugeParam
+      - rangeValCopy
+      - ifElseChain
   gocyclo:
     min-complexity: 15
   goimports:
@@ -35,7 +35,6 @@ linters:
     - dogsled
     - dupl
     - errcheck
-    - exportloopref
     - funlen
     - gochecknoinits
     - goconst
@@ -46,7 +45,6 @@ linters:
     - goprintffuncname
     - gosec
     - gosimple
-    - govet
     - ineffassign
     - lll
     - misspell

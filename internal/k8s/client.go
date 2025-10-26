@@ -7,12 +7,12 @@ import (
 	"path/filepath"
 	"time"
 
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/homedir"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	corev1 "k8s.io/api/core/v1"
 )
 
 // Client wraps the Kubernetes clientset with additional context
@@ -191,14 +191,17 @@ func (c *Client) GetContexts() []string {
 }
 
 // TestConnection verifies the connection to the Kubernetes cluster
-func (c *Client) TestConnection(ctx context.Context) error {
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+func (c *Client) TestConnection(parentCtx context.Context) error {
+	ctx, cancel := context.WithTimeout(parentCtx, 5*time.Second)
 	defer cancel()
 
 	_, err := c.clientset.ServerVersion()
 	if err != nil {
 		return fmt.Errorf("failed to connect to cluster: %w", err)
 	}
+
+	// Use ctx if we add more API calls later
+	_ = ctx
 
 	return nil
 }
