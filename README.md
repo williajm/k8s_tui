@@ -95,28 +95,6 @@ keybindings:              # Customize key bindings
   search: ["/"]
 ```
 
-## Screenshots
-
-```
-┌────────────────────────────────────────────────────────────────────┐
-│ K8S-TUI │ Context: minikube │ NS: default │ ◉ Connected            │
-├─────────────────────┬──────────────────────────────────────────────┤
-│ Resources           │ nginx-deployment-6799fc88d8-x2plm            │
-│                     │                                              │
-│ ▾ Pods (3)          │ Status:     Running                          │
-│   nginx         ✓   │ Ready:      1/1                              │
-│   redis         ✓   │ Age:        2 days                           │
-│   postgres      ⚠   │ IP:         10.244.0.15                      │
-│                     │                                              │
-│ ▸ Services          │ Containers:                                  │
-│ ▸ Deployments       │ └─ nginx (nginx:1.21)                        │
-│                     │    Restarts:  0                              │
-│                     │    CPU:       10m                            │
-│                     │    Memory:    128Mi                          │
-└─────────────────────┴──────────────────────────────────────────────┘
- [↑↓] Navigate  [Enter] Select  [/] Search  [q] Quit
-```
-
 ## Development
 
 ### Building from Source
