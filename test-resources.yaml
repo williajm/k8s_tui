@@ -1,0 +1,441 @@
+# K8S-TUI Test Resources
+# This file creates a variety of Kubernetes resources for manual testing of the TUI
+# Apply with: kubectl apply -f test-resources.yaml
+# Delete with: kubectl delete -f test-resources.yaml
+
+---
+# Test Namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: k8s-tui-test
+  labels:
+    app: k8s-tui-test
+
+---
+# ConfigMap for nginx configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-config
+  namespace: k8s-tui-test
+data:
+  index.html: |
+    <html>
+    <head><title>K8S-TUI Test</title></head>
+    <body><h1>Hello from K8S-TUI Test!</h1></body>
+    </html>
+
+---
+# Deployment 1: Healthy nginx deployment (3 replicas, all ready)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-healthy
+  namespace: k8s-tui-test
+  labels:
+    app: nginx
+    env: test
+    status: healthy
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: nginx
+      env: test
+  template:
+    metadata:
+      labels:
+        app: nginx
+        env: test
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.25-alpine
+        ports:
+        - containerPort: 80
+          name: http
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 10
+          periodSeconds: 10
+
+---
+# Deployment 2: Single replica deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis-single
+  namespace: k8s-tui-test
+  labels:
+    app: redis
+    env: test
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+      env: test
+  template:
+    metadata:
+      labels:
+        app: redis
+        env: test
+    spec:
+      containers:
+      - name: redis
+        image: redis:7-alpine
+        ports:
+        - containerPort: 6379
+          name: redis
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+
+---
+# Deployment 3: Zero replicas (scaled down)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-scaled-down
+  namespace: k8s-tui-test
+  labels:
+    app: test-app
+    env: test
+    status: scaled-down
+spec:
+  replicas: 0
+  selector:
+    matchLabels:
+      app: test-app
+      env: test
+  template:
+    metadata:
+      labels:
+        app: test-app
+        env: test
+    spec:
+      containers:
+      - name: app
+        image: busybox:latest
+        command: ['sh', '-c', 'echo "Hello" && sleep 3600']
+
+---
+# StatefulSet 1: Postgres cluster (3 replicas)
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres-cluster
+  namespace: k8s-tui-test
+  labels:
+    app: postgres
+    env: test
+spec:
+  serviceName: postgres-headless
+  replicas: 3
+  updateStrategy:
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      app: postgres
+      env: test
+  template:
+    metadata:
+      labels:
+        app: postgres
+        env: test
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:16-alpine
+        ports:
+        - containerPort: 5432
+          name: postgres
+        env:
+        - name: POSTGRES_PASSWORD
+          value: testpassword
+        - name: POSTGRES_DB
+          value: testdb
+        - name: PGDATA
+          value: /var/lib/postgresql/data/pgdata
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+        volumeMounts:
+        - name: data
+          mountPath: /var/lib/postgresql/data
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: 1Gi
+
+---
+# StatefulSet 2: Redis cluster (smaller, 2 replicas)
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis-cluster
+  namespace: k8s-tui-test
+  labels:
+    app: redis-cluster
+    env: test
+spec:
+  serviceName: redis-cluster-headless
+  replicas: 2
+  updateStrategy:
+    type: OnDelete
+  selector:
+    matchLabels:
+      app: redis-cluster
+      env: test
+  template:
+    metadata:
+      labels:
+        app: redis-cluster
+        env: test
+    spec:
+      containers:
+      - name: redis
+        image: redis:7-alpine
+        ports:
+        - containerPort: 6379
+          name: redis
+        resources:
+          requests:
+            cpu: 50m
+            memory: 128Mi
+
+---
+# Service 1: ClusterIP for nginx
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-service
+  namespace: k8s-tui-test
+  labels:
+    app: nginx
+spec:
+  type: ClusterIP
+  selector:
+    app: nginx
+    env: test
+  ports:
+  - port: 80
+    targetPort: 80
+    protocol: TCP
+    name: http
+
+---
+# Service 2: NodePort for nginx (accessible from outside)
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-nodeport
+  namespace: k8s-tui-test
+  labels:
+    app: nginx
+spec:
+  type: NodePort
+  selector:
+    app: nginx
+    env: test
+  ports:
+  - port: 80
+    targetPort: 80
+    nodePort: 30080
+    protocol: TCP
+    name: http
+
+---
+# Service 3: Headless service for postgres
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-headless
+  namespace: k8s-tui-test
+  labels:
+    app: postgres
+spec:
+  clusterIP: None
+  selector:
+    app: postgres
+    env: test
+  ports:
+  - port: 5432
+    targetPort: 5432
+    protocol: TCP
+    name: postgres
+
+---
+# Service 4: Headless service for redis cluster
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-cluster-headless
+  namespace: k8s-tui-test
+  labels:
+    app: redis-cluster
+spec:
+  clusterIP: None
+  selector:
+    app: redis-cluster
+    env: test
+  ports:
+  - port: 6379
+    targetPort: 6379
+    protocol: TCP
+    name: redis
+
+---
+# Service 5: Regular ClusterIP for redis
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-service
+  namespace: k8s-tui-test
+  labels:
+    app: redis
+spec:
+  type: ClusterIP
+  selector:
+    app: redis
+    env: test
+  ports:
+  - port: 6379
+    targetPort: 6379
+    protocol: TCP
+    name: redis
+
+---
+# Service 6: Multi-port service
+apiVersion: v1
+kind: Service
+metadata:
+  name: multi-port-service
+  namespace: k8s-tui-test
+  labels:
+    app: nginx
+spec:
+  type: ClusterIP
+  selector:
+    app: nginx
+    env: test
+  ports:
+  - port: 80
+    targetPort: 80
+    protocol: TCP
+    name: http
+  - port: 443
+    targetPort: 80
+    protocol: TCP
+    name: https
+
+---
+# Standalone Pod 1: Running pod with multiple containers
+apiVersion: v1
+kind: Pod
+metadata:
+  name: multi-container-pod
+  namespace: k8s-tui-test
+  labels:
+    app: multi-container
+    env: test
+spec:
+  containers:
+  - name: main-app
+    image: nginx:alpine
+    ports:
+    - containerPort: 80
+  - name: sidecar
+    image: busybox:latest
+    command: ['sh', '-c', 'while true; do echo "Sidecar running"; sleep 30; done']
+  - name: logger
+    image: busybox:latest
+    command: ['sh', '-c', 'while true; do echo "Logger running"; sleep 60; done']
+
+---
+# Standalone Pod 2: Simple running pod
+apiVersion: v1
+kind: Pod
+metadata:
+  name: standalone-busybox
+  namespace: k8s-tui-test
+  labels:
+    app: busybox
+    env: test
+spec:
+  containers:
+  - name: busybox
+    image: busybox:latest
+    command: ['sh', '-c', 'echo "Starting..." && sleep 3600']
+
+---
+# Standalone Pod 3: Pod that will complete (Succeeded state)
+apiVersion: v1
+kind: Pod
+metadata:
+  name: completed-job-pod
+  namespace: k8s-tui-test
+  labels:
+    app: job
+    env: test
+spec:
+  restartPolicy: Never
+  containers:
+  - name: worker
+    image: busybox:latest
+    command: ['sh', '-c', 'echo "Job completed successfully" && exit 0']
+
+---
+# Deployment with intentional image pull error (to test error states)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: failing-deployment
+  namespace: k8s-tui-test
+  labels:
+    app: failing
+    env: test
+    status: failing
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: failing
+      env: test
+  template:
+    metadata:
+      labels:
+        app: failing
+        env: test
+    spec:
+      containers:
+      - name: app
+        image: nonexistent-image:invalid-tag
+        imagePullPolicy: Always
