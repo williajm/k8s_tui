@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"time"
 
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -204,4 +205,118 @@ func (c *Client) TestConnection(parentCtx context.Context) error {
 	_ = ctx
 
 	return nil
+}
+
+// GetServices retrieves services from the specified namespace
+func (c *Client) GetServices(ctx context.Context, namespace string) (*corev1.ServiceList, error) {
+	if namespace == "" {
+		namespace = c.namespace
+	}
+
+	services, err := c.clientset.CoreV1().Services(namespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list services: %w", err)
+	}
+
+	return services, nil
+}
+
+// GetAllServices retrieves services from all namespaces
+func (c *Client) GetAllServices(ctx context.Context) (*corev1.ServiceList, error) {
+	services, err := c.clientset.CoreV1().Services("").List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list all services: %w", err)
+	}
+
+	return services, nil
+}
+
+// GetService retrieves a specific service
+func (c *Client) GetService(ctx context.Context, namespace, name string) (*corev1.Service, error) {
+	if namespace == "" {
+		namespace = c.namespace
+	}
+
+	service, err := c.clientset.CoreV1().Services(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get service: %w", err)
+	}
+
+	return service, nil
+}
+
+// GetDeployments retrieves deployments from the specified namespace
+func (c *Client) GetDeployments(ctx context.Context, namespace string) (*appsv1.DeploymentList, error) {
+	if namespace == "" {
+		namespace = c.namespace
+	}
+
+	deployments, err := c.clientset.AppsV1().Deployments(namespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list deployments: %w", err)
+	}
+
+	return deployments, nil
+}
+
+// GetAllDeployments retrieves deployments from all namespaces
+func (c *Client) GetAllDeployments(ctx context.Context) (*appsv1.DeploymentList, error) {
+	deployments, err := c.clientset.AppsV1().Deployments("").List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list all deployments: %w", err)
+	}
+
+	return deployments, nil
+}
+
+// GetDeployment retrieves a specific deployment
+func (c *Client) GetDeployment(ctx context.Context, namespace, name string) (*appsv1.Deployment, error) {
+	if namespace == "" {
+		namespace = c.namespace
+	}
+
+	deployment, err := c.clientset.AppsV1().Deployments(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get deployment: %w", err)
+	}
+
+	return deployment, nil
+}
+
+// GetStatefulSets retrieves statefulsets from the specified namespace
+func (c *Client) GetStatefulSets(ctx context.Context, namespace string) (*appsv1.StatefulSetList, error) {
+	if namespace == "" {
+		namespace = c.namespace
+	}
+
+	statefulSets, err := c.clientset.AppsV1().StatefulSets(namespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list statefulsets: %w", err)
+	}
+
+	return statefulSets, nil
+}
+
+// GetAllStatefulSets retrieves statefulsets from all namespaces
+func (c *Client) GetAllStatefulSets(ctx context.Context) (*appsv1.StatefulSetList, error) {
+	statefulSets, err := c.clientset.AppsV1().StatefulSets("").List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list all statefulsets: %w", err)
+	}
+
+	return statefulSets, nil
+}
+
+// GetStatefulSet retrieves a specific statefulset
+func (c *Client) GetStatefulSet(ctx context.Context, namespace, name string) (*appsv1.StatefulSet, error) {
+	if namespace == "" {
+		namespace = c.namespace
+	}
+
+	statefulSet, err := c.clientset.AppsV1().StatefulSets(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get statefulset: %w", err)
+	}
+
+	return statefulSet, nil
 }
