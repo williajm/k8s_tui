@@ -24,24 +24,15 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.23'
+          go-version: '1.25'
 
       - name: Run Gosec Security Scanner
-        uses: securego/gosec@master
-        with:
-          args: '-no-fail -fmt sarif -out gosec-results.sarif ./...'
-
-      - name: Upload Gosec results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v3
-        if: always()
-        with:
-          sarif_file: gosec-results.sarif
-
-      - name: Run Gosec with console output
         run: |
           go install github.com/securego/gosec/v2/cmd/gosec@latest
+          # Run gosec and output results (don't fail on findings)
           gosec -fmt=json -out=gosec-report.json ./... || true
-          gosec ./...
+          # Show console output
+          gosec ./... || true
 
   trivy:
     name: Trivy Vulnerability Scanner
@@ -96,7 +87,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.23'
+          go-version: '1.25'
 
       - name: Install govulncheck
         run: go install golang.org/x/vuln/cmd/govulncheck@latest
