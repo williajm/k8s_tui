@@ -198,7 +198,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // handleKeyPress processes keyboard input
 //
-//nolint:gocyclo // Handles many keyboard commands, complexity is acceptable
+//nolint:gocyclo,funlen // Handles many keyboard commands, complexity and length are acceptable
 func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Global keys
 	switch {
