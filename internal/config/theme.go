@@ -41,6 +41,8 @@ type ColorScheme struct {
 }
 
 // DarkColorScheme returns the dark color scheme
+//
+//nolint:dupl // Theme definitions intentionally have similar structure with different values
 func DarkColorScheme() ColorScheme {
 	return ColorScheme{
 		Primary:    lipgloss.Color("#00ADD8"), // Kubernetes blue
@@ -60,6 +62,8 @@ func DarkColorScheme() ColorScheme {
 }
 
 // LightColorScheme returns the light color scheme
+//
+//nolint:dupl // Theme definitions intentionally have similar structure with different values
 func LightColorScheme() ColorScheme {
 	return ColorScheme{
 		Primary:    lipgloss.Color("#0066CC"), // Darker blue for light background
