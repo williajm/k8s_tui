@@ -28,10 +28,7 @@ jobs:
           # Linux amd64
           GOOS=linux GOARCH=amd64 go build -v -o k8s-tui-linux-amd64 ./cmd/k8s-tui
 
-          # Linux arm64
-          GOOS=linux GOARCH=arm64 go build -v -o k8s-tui-linux-arm64 ./cmd/k8s-tui
-
-          # macOS amd64
+          # macOS amd64 (Intel)
           GOOS=darwin GOARCH=amd64 go build -v -o k8s-tui-darwin-amd64 ./cmd/k8s-tui
 
           # macOS arm64 (Apple Silicon)
@@ -39,9 +36,6 @@ jobs:
 
           # Windows amd64
           GOOS=windows GOARCH=amd64 go build -v -o k8s-tui-windows-amd64.exe ./cmd/k8s-tui
-
-          # Windows arm64
-          GOOS=windows GOARCH=arm64 go build -v -o k8s-tui-windows-arm64.exe ./cmd/k8s-tui
 
       - name: Generate checksums
         run: |
@@ -88,15 +82,9 @@ jobs:
 
             ### Linux
             ```bash
-            # AMD64
             curl -LO https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/k8s-tui-linux-amd64
             chmod +x k8s-tui-linux-amd64
             sudo mv k8s-tui-linux-amd64 /usr/local/bin/k8s-tui
-
-            # ARM64
-            curl -LO https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/k8s-tui-linux-arm64
-            chmod +x k8s-tui-linux-arm64
-            sudo mv k8s-tui-linux-arm64 /usr/local/bin/k8s-tui
             ```
 
             ### macOS
@@ -122,11 +110,9 @@ jobs:
             ```
           files: |
             k8s-tui-linux-amd64
-            k8s-tui-linux-arm64
             k8s-tui-darwin-amd64
             k8s-tui-darwin-arm64
             k8s-tui-windows-amd64.exe
-            k8s-tui-windows-arm64.exe
             checksums.txt
           draft: false
           prerelease: false
