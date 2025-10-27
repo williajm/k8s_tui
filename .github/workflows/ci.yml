@@ -47,6 +47,24 @@ jobs:
         if [ "$RUNNER_OS" == "Windows" ]; then rm -f .out || true; fi
       shell: bash
 
+    - name: Check coverage threshold
+      if: matrix.os == 'ubuntu-latest' && matrix.go-version == '1.23'
+      run: |
+        go tool cover -func=coverage.out -o=coverage.txt
+        total_coverage=$(grep total coverage.txt | awk '{print $3}' | sed 's/%//')
+        echo "Total coverage: ${total_coverage}%"
+
+        # Set minimum coverage threshold (60%)
+        threshold=60.0
+
+        if (( $(echo "$total_coverage < $threshold" | bc -l) )); then
+          echo "❌ Coverage ${total_coverage}% is below threshold ${threshold}%"
+          exit 1
+        else
+          echo "✅ Coverage ${total_coverage}% meets threshold ${threshold}%"
+        fi
+      shell: bash
+
     - name: Upload coverage to Codecov
       if: matrix.os == 'ubuntu-latest' && matrix.go-version == '1.23'
       uses: codecov/codecov-action@v4

@@ -1,7 +1,10 @@
 # K8S-TUI
 
 [![CI](https://github.com/williajm/k8s_tui/actions/workflows/ci.yml/badge.svg)](https://github.com/williajm/k8s_tui/actions/workflows/ci.yml)
+[![Security](https://github.com/williajm/k8s_tui/actions/workflows/security.yml/badge.svg)](https://github.com/williajm/k8s_tui/actions/workflows/security.yml)
+[![codecov](https://codecov.io/gh/williajm/k8s_tui/branch/main/graph/badge.svg)](https://codecov.io/gh/williajm/k8s_tui)
 [![Go Report Card](https://goreportcard.com/badge/github.com/williajm/k8s_tui)](https://goreportcard.com/report/github.com/williajm/k8s_tui)
+[![Release](https://img.shields.io/github/v/release/williajm/k8s_tui)](https://github.com/williajm/k8s_tui/releases/latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/williajm/k8s_tui)](https://github.com/williajm/k8s_tui)
 
@@ -32,6 +35,33 @@ A fast, keyboard-driven terminal user interface for Kubernetes cluster managemen
 - **Write Operations**: Scale, delete, restart resources (Phase 7)
 
 ## Installation
+
+### Download Binary (Recommended)
+
+Download the latest release for your platform from the [releases page](https://github.com/williajm/k8s_tui/releases/latest).
+
+**Linux:**
+```bash
+curl -LO https://github.com/williajm/k8s_tui/releases/latest/download/k8s-tui-linux-amd64
+chmod +x k8s-tui-linux-amd64
+sudo mv k8s-tui-linux-amd64 /usr/local/bin/k8s-tui
+```
+
+**macOS:**
+```bash
+# Intel Macs
+curl -LO https://github.com/williajm/k8s_tui/releases/latest/download/k8s-tui-darwin-amd64
+chmod +x k8s-tui-darwin-amd64
+sudo mv k8s-tui-darwin-amd64 /usr/local/bin/k8s-tui
+
+# Apple Silicon
+curl -LO https://github.com/williajm/k8s_tui/releases/latest/download/k8s-tui-darwin-arm64
+chmod +x k8s-tui-darwin-arm64
+sudo mv k8s-tui-darwin-arm64 /usr/local/bin/k8s-tui
+```
+
+**Windows:**
+Download `k8s-tui-windows-amd64.exe` from the releases page and add it to your PATH.
 
 ### From Source
 ```bash

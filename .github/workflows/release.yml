@@ -1,0 +1,134 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - name: Build binaries
+        run: |
+          # Linux amd64
+          GOOS=linux GOARCH=amd64 go build -v -o k8s-tui-linux-amd64 ./cmd/k8s-tui
+
+          # Linux arm64
+          GOOS=linux GOARCH=arm64 go build -v -o k8s-tui-linux-arm64 ./cmd/k8s-tui
+
+          # macOS amd64
+          GOOS=darwin GOARCH=amd64 go build -v -o k8s-tui-darwin-amd64 ./cmd/k8s-tui
+
+          # macOS arm64 (Apple Silicon)
+          GOOS=darwin GOARCH=arm64 go build -v -o k8s-tui-darwin-arm64 ./cmd/k8s-tui
+
+          # Windows amd64
+          GOOS=windows GOARCH=amd64 go build -v -o k8s-tui-windows-amd64.exe ./cmd/k8s-tui
+
+          # Windows arm64
+          GOOS=windows GOARCH=arm64 go build -v -o k8s-tui-windows-arm64.exe ./cmd/k8s-tui
+
+      - name: Generate checksums
+        run: |
+          sha256sum k8s-tui-* > checksums.txt
+          cat checksums.txt
+
+      - name: Generate release notes
+        id: release_notes
+        run: |
+          # Get the previous tag
+          PREV_TAG=$(git describe --abbrev=0 --tags $(git rev-list --tags --skip=1 --max-count=1) 2>/dev/null || echo "")
+
+          # Generate changelog
+          if [ -z "$PREV_TAG" ]; then
+            echo "NOTES<<EOF" >> $GITHUB_OUTPUT
+            echo "## What's New" >> $GITHUB_OUTPUT
+            echo "" >> $GITHUB_OUTPUT
+            echo "Initial release of K8S-TUI!" >> $GITHUB_OUTPUT
+            echo "" >> $GITHUB_OUTPUT
+            echo "### Features" >> $GITHUB_OUTPUT
+            git log --pretty=format:"- %s" | grep -E "^- (feat|feature)" >> $GITHUB_OUTPUT || echo "- Initial implementation" >> $GITHUB_OUTPUT
+            echo "" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          else
+            echo "NOTES<<EOF" >> $GITHUB_OUTPUT
+            echo "## What's Changed" >> $GITHUB_OUTPUT
+            echo "" >> $GITHUB_OUTPUT
+            git log ${PREV_TAG}..HEAD --pretty=format:"- %s (%h)" --reverse >> $GITHUB_OUTPUT
+            echo "" >> $GITHUB_OUTPUT
+            echo "" >> $GITHUB_OUTPUT
+            echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/${PREV_TAG}...${{ github.ref_name }}" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          body: |
+            ${{ steps.release_notes.outputs.NOTES }}
+
+            ## Installation
+
+            Download the appropriate binary for your platform:
+
+            ### Linux
+            ```bash
+            # AMD64
+            curl -LO https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/k8s-tui-linux-amd64
+            chmod +x k8s-tui-linux-amd64
+            sudo mv k8s-tui-linux-amd64 /usr/local/bin/k8s-tui
+
+            # ARM64
+            curl -LO https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/k8s-tui-linux-arm64
+            chmod +x k8s-tui-linux-arm64
+            sudo mv k8s-tui-linux-arm64 /usr/local/bin/k8s-tui
+            ```
+
+            ### macOS
+            ```bash
+            # Intel
+            curl -LO https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/k8s-tui-darwin-amd64
+            chmod +x k8s-tui-darwin-amd64
+            sudo mv k8s-tui-darwin-amd64 /usr/local/bin/k8s-tui
+
+            # Apple Silicon
+            curl -LO https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/k8s-tui-darwin-arm64
+            chmod +x k8s-tui-darwin-arm64
+            sudo mv k8s-tui-darwin-arm64 /usr/local/bin/k8s-tui
+            ```
+
+            ### Windows
+            Download the appropriate `.exe` file and add it to your PATH.
+
+            ## Verify Checksums
+            ```bash
+            curl -LO https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/checksums.txt
+            sha256sum -c checksums.txt
+            ```
+          files: |
+            k8s-tui-linux-amd64
+            k8s-tui-linux-arm64
+            k8s-tui-darwin-amd64
+            k8s-tui-darwin-arm64
+            k8s-tui-windows-amd64.exe
+            k8s-tui-windows-arm64.exe
+            checksums.txt
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
