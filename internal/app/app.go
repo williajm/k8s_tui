@@ -7,6 +7,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/williajm/k8s-tui/internal/config"
 	"github.com/williajm/k8s-tui/internal/k8s"
 	"github.com/williajm/k8s-tui/internal/models"
 	"github.com/williajm/k8s-tui/internal/ui/components"
@@ -24,6 +25,8 @@ const (
 // Model represents the application state
 type Model struct {
 	client            *k8s.Client
+	config            *config.Config
+	styles            config.Styles
 	keyMap            keys.KeyMap
 	header            *components.Header
 	footer            *components.Footer
@@ -40,6 +43,7 @@ type Model struct {
 	viewMode          ViewMode
 	searchMode        bool
 	searchQuery       string
+	refreshInterval   time.Duration
 }
 
 // Message types
@@ -61,8 +65,24 @@ type tickMsg time.Time
 
 type errMsg struct{ err error }
 
-// NewModel creates a new application model
+// NewModel creates a new application model with default configuration
 func NewModel(client *k8s.Client) Model {
+	return NewModelWithConfig(client, config.DefaultConfig())
+}
+
+// NewModelWithConfig creates a new application model with the given configuration
+func NewModelWithConfig(client *k8s.Client, cfg *config.Config) Model {
+	// Get color scheme based on theme
+	themeType := config.ThemeType(cfg.UI.Theme)
+	colorScheme, err := config.GetColorScheme(themeType)
+	if err != nil {
+		// Fallback to dark theme if invalid
+		colorScheme = config.DarkColorScheme()
+	}
+
+	// Apply color scheme to create styles
+	styles := colorScheme.ApplyColorScheme()
+
 	header := components.NewHeader(
 		client.GetCurrentContext(),
 		client.GetNamespace(),
@@ -71,6 +91,8 @@ func NewModel(client *k8s.Client) Model {
 
 	return Model{
 		client:            client,
+		config:            cfg,
+		styles:            styles,
 		keyMap:            keys.DefaultKeyMap(),
 		header:            header,
 		footer:            components.NewFooter(),
@@ -82,6 +104,7 @@ func NewModel(client *k8s.Client) Model {
 		loading:           true,
 		viewMode:          ViewModeList,
 		searchMode:        false,
+		refreshInterval:   cfg.GetRefreshInterval(),
 	}
 }
 
@@ -89,7 +112,7 @@ func NewModel(client *k8s.Client) Model {
 func (m Model) Init() tea.Cmd {
 	return tea.Batch(
 		m.loadResources(),
-		tickCmd(),
+		m.tickCmd(),
 	)
 }
 
@@ -157,10 +180,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case tickMsg:
-		// Auto-refresh every 5 seconds
+		// Auto-refresh based on configured interval
 		return m, tea.Batch(
 			m.loadResources(),
-			tickCmd(),
+			m.tickCmd(),
 		)
 
 	case errMsg:
@@ -523,9 +546,9 @@ func (m Model) loadNamespaces() tea.Cmd {
 	}
 }
 
-// tickCmd creates a tick command for auto-refresh
-func tickCmd() tea.Cmd {
-	return tea.Tick(5*time.Second, func(t time.Time) tea.Msg {
+// tickCmd creates a tick command for auto-refresh using configured interval
+func (m Model) tickCmd() tea.Cmd {
+	return tea.Tick(m.refreshInterval, func(t time.Time) tea.Msg {
 		return tickMsg(t)
 	})
 }

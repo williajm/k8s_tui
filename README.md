@@ -9,13 +9,27 @@ A fast, keyboard-driven terminal user interface for Kubernetes cluster managemen
 
 ## Features
 
-- **Multi-Resource Support**: View and inspect Pods, Services, Deployments, ConfigMaps, Secrets, and more
-- **Real-time Updates**: Automatic refresh with Kubernetes watch API integration
-- **Keyboard-Driven**: Complete navigation without mouse, vim-style keybindings
-- **Multi-Context**: Switch between different clusters without restarting
-- **Namespace Filtering**: Quickly switch between or view all namespaces
-- **Log Streaming**: View pod logs directly in the TUI
+### ✅ Available Now (v0.2.0)
+
+- **Multi-Resource Support**: View Pods, Services, Deployments, and StatefulSets
+- **Tab Navigation**: Switch between resource types with Tab/Shift+Tab or number keys (1-4)
+- **Detail Views**: Press Enter to view comprehensive resource details
+- **Namespace Switching**: Quick namespace selector with 'n' key
+- **Search/Filter**: Real-time filtering with '/' key across all resource types
+- **Auto-Refresh**: Resources update automatically every 5 seconds
+- **Status Indicators**: Visual symbols (✓, ✗, ○, ⚠, ⊗) for resource health
+- **Keyboard-Driven**: Complete navigation without mouse
 - **Fast & Lightweight**: Single binary, minimal resource usage
+
+### 🚧 Coming Soon
+
+- **Log Streaming**: View pod logs directly in the TUI (Phase 3)
+- **Events Display**: Show Kubernetes events for resources (Phase 3)
+- **Describe Functionality**: Detailed resource inspection (Phase 3)
+- **Watch API**: Replace polling with efficient event-driven updates (Phase 4)
+- **Configuration**: Persistent settings and custom themes (Phase 5)
+- **More Resources**: ConfigMaps, Secrets, Jobs, DaemonSets, etc. (Phase 6)
+- **Write Operations**: Scale, delete, restart resources (Phase 7)
 
 ## Installation
 
@@ -51,49 +65,76 @@ go build -o k8s-tui cmd/k8s-tui/main.go
 ### Keyboard Shortcuts
 
 #### Global Navigation
-- `Tab` / `Shift+Tab` - Switch between panes
-- `1-9` - Quick switch to numbered tab
+- `Tab` / `Shift+Tab` - Switch between resource tabs
+- `1-4` - Quick switch to tab (1=Pods, 2=Services, 3=Deployments, 4=StatefulSets)
 - `/` - Search/filter in current list
 - `Esc` - Cancel/go back
 - `?` - Show help screen
 - `q` - Quit application
 
 #### List Navigation
-- `↑` / `k` - Move up
-- `↓` / `j` - Move down
-- `Enter` / `→` / `l` - View details
-- `PgUp` / `PgDn` - Page up/down
-- `g` / `G` - Go to top/bottom
+- `↑` / `↓` - Move up/down
+- `Enter` - View resource details
+- `Page Up` / `Page Down` - Page up/down
+- `Home` / `End` - Go to top/bottom
 
 #### Resource Actions
-- `n` - Change namespace
+- `n` - Change namespace (opens selector dialog)
+- `r` - Manual refresh (auto-refresh runs every 5s)
+
+#### Coming Soon (Phase 3+)
+- `l` - View pod logs
+- `e` - View events for resource
+- `d` - Describe resource (detailed inspection)
 - `c` - Change context
-- `r` - Refresh current view
-- `L` - View pod logs (when pod selected)
-- `E` - View events for resource
-- `Y` - View resource as YAML
-- `D` - Describe resource
+
+## Testing
+
+### Manual Testing with Test Resources
+
+The project includes comprehensive test Kubernetes resources for manual testing:
+
+```bash
+# Apply test resources
+kubectl apply -f test-resources.yaml
+
+# Run k8s-tui in test namespace
+./k8s-tui -n k8s-tui-test
+
+# Clean up when done
+kubectl delete -f test-resources.yaml
+```
+
+See [TEST_RESOURCES.md](TEST_RESOURCES.md) for detailed testing scenarios and expected behavior.
+
+### Automated Testing
+
+Run the comprehensive test suite:
+
+```bash
+# Run all tests
+go test ./...
+
+# Run with coverage
+go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
+
+# View coverage report
+go tool cover -html=coverage.out
+```
+
+**Current Test Coverage:**
+- ✅ **Models**: PodInfo, ServiceInfo, DeploymentInfo, StatefulSetInfo (all status symbols and health checks)
+- ✅ **UI Components**: ResourceList, Tabs, Selector (navigation, filtering, state management)
+- ✅ **Styles**: Theme colors, status styles, rendering helpers
 
 ## Configuration
 
-Configuration file location: `~/.k8s-tui/config.yaml`
+**Note**: Configuration support is planned for Phase 5. Currently, k8s-tui uses sensible defaults:
+- Auto-refresh: 5 seconds
+- Theme: Dark mode
+- Default namespace: From kubeconfig context
 
-```yaml
-ui:
-  theme: dark                # Options: dark, light, auto
-  refresh_interval: 5s       # Auto-refresh interval
-  show_system_pods: false    # Show kube-system pods
-  sidebar_width: 30          # Sidebar width percentage
-
-performance:
-  max_list_items: 500       # Maximum items in lists
-  cache_ttl: 30s           # Resource cache duration
-
-keybindings:              # Customize key bindings
-  quit: ["q", "ctrl+c"]
-  help: ["?"]
-  search: ["/"]
-```
+Future configuration file location: `~/.k8s-tui/config.yaml` (Phase 5)
 
 ## Development
 
@@ -120,15 +161,8 @@ go tool cover -html=coverage.out
 go run -race cmd/k8s-tui/main.go
 ```
 
-### Testing
+### Development Testing
 
-The project includes comprehensive unit tests for core functionality:
-
-- **Models**: 67.3% coverage - Pod info parsing, status symbols, age formatting
-- **UI Components**: 32.0% coverage - List navigation, filtering, pagination
-- **Styles**: 100% coverage - Theme colors, status styles, rendering helpers
-
-Run tests locally:
 ```bash
 # Run all tests
 go test ./...
@@ -138,6 +172,9 @@ go test -v ./...
 
 # Run with coverage
 go test -coverprofile=coverage.out ./...
+
+# Run with race detector
+go test -race ./...
 
 # Run specific package
 go test ./internal/models -v
@@ -177,29 +214,65 @@ See [.github/DEVELOPMENT_WORKFLOW.md](.github/DEVELOPMENT_WORKFLOW.md) for detai
 ### Project Structure
 ```
 k8s-tui/
-├── cmd/k8s-tui/       # Application entry point
-├── internal/          # Internal packages
-│   ├── app/          # Main application logic
-│   ├── k8s/          # Kubernetes client
-│   ├── ui/           # TUI components
-│   └── models/       # Data models
-└── pkg/              # Public packages
+├── cmd/k8s-tui/              # Application entry point
+├── internal/                 # Internal packages
+│   ├── app/                 # Main Bubble Tea application (Model-Update-View)
+│   ├── config/              # Configuration management
+│   ├── k8s/                 # Kubernetes client wrapper
+│   ├── models/              # Data models (PodInfo, ServiceInfo, etc.)
+│   └── ui/                  # UI layer
+│       ├── components/      # Reusable UI components (ResourceList, Tabs, Selector, etc.)
+│       ├── keys/            # Keyboard bindings
+│       └── styles/          # Lipgloss theme and styling
+├── test-resources.yaml      # Kubernetes test resources
+├── TEST_RESOURCES.md        # Manual testing guide
+└── CLAUDE.md               # Development guidance
 ```
 
 ## Roadmap
 
-### Current Phase (v0.1.0) - Read-Only
-- [x] Project setup
-- [ ] Basic resource viewing
-- [ ] Navigation and search
-- [ ] Real-time updates
+See [CLAUDE.md](CLAUDE.md#development-roadmap) for the complete development roadmap.
 
-### Future Releases
-- [ ] v0.2.0 - Enhanced viewing (logs, events, describe)
-- [ ] v0.3.0 - Configuration and themes
-- [ ] v0.4.0 - Performance optimizations
-- [ ] v1.0.0 - Production ready
-- [ ] v1.1.0 - Write operations (scale, delete, edit)
+### Phase 1 - Foundation (v0.1.0) ✅ Complete
+- ✅ Basic Bubble Tea TUI framework
+- ✅ Kubernetes client integration
+- ✅ Pod listing and navigation
+- ✅ CI/CD pipeline with cross-platform testing
+- ✅ Unit testing infrastructure
+
+### Phase 2 - Core Features (v0.2.0) ✅ Complete - Ready for PR
+- ✅ Multi-resource support (Pods, Services, Deployments, StatefulSets)
+- ✅ Tab navigation between resource types
+- ✅ Detail views for all resources
+- ✅ Namespace switching with selector dialog
+- ✅ Search/filter functionality
+- ✅ Real-time updates (5-second auto-refresh)
+- ✅ Comprehensive unit tests for all Phase 2 components
+
+### Phase 3 - Observability & Logs (v0.3.0) 📋 Planned
+- [ ] Pod log streaming view
+- [ ] Kubernetes events display
+- [ ] Describe functionality (full resource inspection)
+
+### Phase 4 - Real-time Watch & Performance (v0.4.0) 📋 Planned
+- [ ] Kubernetes Watch API integration
+- [ ] Replace polling with event-driven updates
+- [ ] Performance optimizations
+
+### Phase 5 - Configuration & Customization (v0.5.0) 📋 Planned
+- [ ] Configuration file support
+- [ ] Theme system with multiple built-in themes
+- [ ] UI preferences
+
+### Phase 6 - Additional Resources (v0.6.0) 📋 Planned
+- [ ] ConfigMaps, Secrets, Jobs, CronJobs, DaemonSets, etc.
+- [ ] Nodes (cluster-level view)
+
+### Phase 7 - Write Operations (v0.7.0+) 🔒 Future
+- [ ] Delete pods/resources (with confirmation)
+- [ ] Scale deployments
+- [ ] Restart rollouts
+- [ ] Safety features (confirmation dialogs, dry-run, audit logging)
 
 ## Contributing
 

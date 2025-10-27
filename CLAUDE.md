@@ -80,9 +80,9 @@ The codebase follows a clean architecture pattern:
 - **cmd/k8s-tui/**: Application entry point using Cobra for CLI handling
 - **internal/app/**: Core Bubble Tea application model (Model-Update-View pattern)
 - **internal/k8s/**: Kubernetes client wrapper with connection management
-- **internal/models/**: Data models for pod info, status formatting, and age calculations
+- **internal/models/**: Data models for resources (PodInfo, ServiceInfo, DeploymentInfo, StatefulSetInfo)
 - **internal/ui/**: UI layer separated into:
-  - **components/**: Reusable UI components (Header, Footer, PodList)
+  - **components/**: Reusable UI components (Header, Footer, ResourceList, Tabs, Selector, DetailView)
   - **keys/**: Keyboard bindings
   - **styles/**: Lipgloss theme and styling
 
@@ -90,31 +90,96 @@ The codebase follows a clean architecture pattern:
 
 The app uses the Elm Architecture (TEA) pattern:
 
-1. **Model** (`app.Model`): Holds application state (client, UI components, dimensions, error state)
-2. **Update** (`app.Update`): Processes messages (key presses, window size, pod data) and returns new model + commands
-3. **View** (`app.View`): Renders the current state to a string
+1. **Model** (`app.Model`): Holds application state including:
+   - UI components (header, footer, tabs, resourceList, detailView, namespaceSelector)
+   - View state (viewMode, searchMode, loading, connected)
+   - Kubernetes client and current namespace/context
 
-**Message types**:
-- `podsLoadedMsg`: Async pod data loaded from Kubernetes
+2. **Update** (`app.Update`): Processes messages and returns new model + commands:
+   - Routes to specialized handlers: `handleKeyPress`, `handleNamespaceSelector`, `handleSearchMode`
+   - Handles resource loading messages per resource type
+   - Manages auto-refresh with 5-second tick
+
+3. **View** (`app.View`): Renders the current state:
+   - Switches between list view and detail view based on `viewMode`
+   - Overlays namespace selector when visible
+   - Shows help screen or error messages as needed
+
+**Key Message types**:
+- `resourcesLoadedMsg`: Contains loaded resources for a specific ResourceType (pods, services, deployments, statefulsets)
+- `namespacesLoadedMsg`: List of available namespaces for selector
 - `tickMsg`: Timer for 5-second auto-refresh
 - `tea.KeyMsg`: Keyboard input
 - `tea.WindowSizeMsg`: Terminal resize events
+
+### ViewMode State Management
+
+The app has two primary view modes:
+- **ViewModeList**: Shows the resource list (default view)
+- **ViewModeDetail**: Shows detailed information for the selected resource
+
+Pressing Enter switches to detail view, Esc/Back returns to list view. View mode resets when switching tabs.
 
 ### Kubernetes Client Pattern
 
 The `k8s.Client` wraps `kubernetes.Clientset` and provides:
 - Kubeconfig loading priority: in-cluster → KUBECONFIG env → ~/.kube/config
-- Context and namespace management
+- Context and namespace management (mutable via SetNamespace)
 - Connection testing with timeout
-- Resource fetching methods (GetPods, GetNamespaces, GetPodLogs)
+- Resource fetching methods for multiple resource types:
+  - Pods: `GetPods`, `GetAllPods`, `GetPod`, `GetPodLogs`
+  - Services: `GetServices`, `GetAllServices`, `GetService`
+  - Deployments: `GetDeployments`, `GetAllDeployments`, `GetDeployment`
+  - StatefulSets: `GetStatefulSets`, `GetAllStatefulSets`, `GetStatefulSet`
+  - Namespaces: `GetNamespaces`
+
+### Resource Models
+
+Each resource type has a corresponding `*Info` model in `internal/models/`:
+- **PodInfo**: Includes containers array, ready status, restart counts
+- **ServiceInfo**: Includes type, ClusterIP, ExternalIP, ports, selectors
+- **DeploymentInfo**: Includes replicas, ready, up-to-date, available counts
+- **StatefulSetInfo**: Includes replicas, ready count, update strategy
+
+All models provide:
+- `GetStatusSymbol()`: Returns visual indicator (✓, ✗, ○, ⚠, ⊗)
+- `formatAge()`: Converts timestamp to human-readable age (e.g., "5m", "2h", "3d")
 
 ### UI Component Design
 
-Components like `PodList` maintain their own state:
-- Selection index and viewport for scrolling
-- Search filtering logic
-- Size-aware rendering with viewport adjustment
-- Table-style layout with status symbols (✓, ✗, ○, ⚠, ⊗)
+**ResourceList** (generic component):
+- Maintains state for all resource types in separate slices
+- Switches display mode via `ResourceType` enum (Pod, Service, Deployment, StatefulSet)
+- Handles navigation (up/down, page up/down, home/end)
+- Supports search filtering
+- Renders appropriate table columns per resource type
+
+**Tabs**:
+- Manages active tab selection (0=Pods, 1=Services, 2=Deployments, 3=StatefulSets)
+- Provides `NextTab()` and `PrevTab()` for keyboard navigation
+- Renders with active/inactive styling
+
+**Selector** (namespace selector):
+- Modal-style component for choosing from a list of options
+- Shows/hides via `IsVisible()` state
+- Supports up/down navigation within options
+- Returns selected value via `GetSelected()`
+
+**DetailView**:
+- Renders detailed information for selected resource
+- Type-specific methods: `ViewPod()`, `ViewService()`, `ViewDeployment()`, `ViewStatefulSet()`
+- Displays formatted key-value pairs using `styles.RenderDetailRow()`
+
+### Component Interaction Pattern
+
+The main app model (`app.Model`) orchestrates all components:
+1. Tabs component determines which `ResourceType` is active
+2. ResourceList displays resources for the current type
+3. When Enter is pressed, app switches to `ViewModeDetail`
+4. DetailView renders the selected resource from ResourceList
+5. Namespace selector overlays everything when visible (triggered by 'n' key)
+
+This pattern avoids tight coupling—components don't know about each other, only the main model coordinates them.
 
 ## Development Workflow
 
@@ -190,13 +255,191 @@ Key enabled linters: bodyclose, errcheck, gosec, gosimple, ineffassign, staticch
 - **Cobra** (v1.10.1): CLI argument parsing
 - **client-go** (v0.34.1): Official Kubernetes Go client
 - **k8s.io/api** (v0.34.1): Kubernetes API types
+- **k8s.io/apimachinery** (v0.34.1): Kubernetes meta types
 
-## Current Phase
+## Development Roadmap
 
-The project is in **Phase 1 - Foundation** (v0.1.0 - Read-Only):
-- Foundation established with testing and CI/CD
-- Working on basic resource viewing functionality
-- Focus is on pods display with real-time updates
-- Navigation and keyboard shortcuts implemented
+### Phase 1 - Foundation (v0.1.0) ✅ **MERGED TO MAIN**
+**Status**: Complete and in production on `main` branch
 
-Future phases will add log viewing, events, describe functionality, configuration, themes, and eventually write operations.
+Features:
+- ✅ Basic Bubble Tea TUI framework setup
+- ✅ Kubernetes client integration with kubeconfig support
+- ✅ Pod listing and navigation (up/down, page up/down, home/end)
+- ✅ Basic status indicators and formatting
+- ✅ Header and footer components
+- ✅ Keyboard shortcuts and help screen
+- ✅ CI/CD pipeline (test, lint, build on multiple platforms)
+- ✅ Unit testing infrastructure with race detector
+- ✅ golangci-lint configuration
+- ✅ Cross-platform build support (Linux, macOS, Windows)
+- ✅ Codecov integration for test coverage
+
+**Branch**: Merged via PR #1 (`feature/phase1-foundation` → `main`)
+
+---
+
+### Phase 2 - Core Features (v0.2.0) ✅ **READY FOR PR** 🚀
+**Status**: Complete on `dev` branch, awaiting merge to `main`
+
+Features:
+- ✅ Multi-resource support (Pods, Services, Deployments, StatefulSets)
+- ✅ Generic ResourceList component for all resource types
+- ✅ Tab navigation between resource types (Tab/Shift+Tab, 1-4 keys)
+- ✅ Detail views for all resources (Enter to view, Esc to return)
+- ✅ Namespace switching with selector dialog ('n' key)
+- ✅ Search/filter functionality ('/' key for search mode)
+- ✅ ViewMode state management (list vs detail view)
+- ✅ Real-time updates with 5-second auto-refresh
+- ✅ Resource-specific data models with status symbols
+- ✅ Component architecture (Tabs, Selector, DetailView)
+
+**Branch**: Currently on `dev` (commit d9bb503), needs PR to `main`
+
+**Next Steps**:
+1. Run linters and tests before creating PR
+2. Create PR: `dev` → `main`
+3. Merge after CI passes
+
+---
+
+### Phase 3 - Observability & Logs (v0.3.0) 📋 **PLANNED**
+**Status**: Not started
+
+**Goal**: Add log viewing, events, and resource inspection capabilities
+
+Planned Features:
+- [ ] Pod log streaming view ('l' key from pod list/detail)
+  - [ ] Container selection for multi-container pods
+  - [ ] Follow mode (live streaming)
+  - [ ] Tail line count configuration
+  - [ ] Log filtering/search within logs
+  - [ ] Previous container logs (for restarted pods)
+- [ ] Kubernetes events display
+  - [ ] Event list view (new tab)
+  - [ ] Resource-specific events in detail view
+  - [ ] Event filtering by type (Normal, Warning, Error)
+  - [ ] Age and reason display
+- [ ] Describe functionality ('d' key from detail view)
+  - [ ] Full resource YAML/JSON view
+  - [ ] Formatted describe output (like `kubectl describe`)
+  - [ ] Syntax highlighting for YAML/JSON
+  - [ ] Copy-to-clipboard support
+
+**Branch**: Will be developed on `dev` branch
+
+---
+
+### Phase 4 - Real-time Watch & Performance (v0.4.0) 📋 **PLANNED**
+**Status**: Not started
+
+**Goal**: Replace polling with efficient Kubernetes Watch API and improve performance
+
+Planned Features:
+- [ ] Kubernetes Watch API integration
+  - [ ] Real-time resource updates via watch streams
+  - [ ] Replace 5-second polling with event-driven updates
+  - [ ] Watch reconnection on failure
+  - [ ] Resource version tracking
+- [ ] Performance optimizations
+  - [ ] Efficient diff-based UI updates
+  - [ ] Lazy loading for large resource lists
+  - [ ] Virtual scrolling for 1000+ items
+  - [ ] Memory usage optimizations
+- [ ] Connection management
+  - [ ] Better connection error handling
+  - [ ] Auto-reconnect with backoff
+  - [ ] Cluster connection status indicator
+
+**Branch**: Will be developed on `dev` branch
+
+---
+
+### Phase 5 - Configuration & Customization (v0.5.0) 📋 **PLANNED**
+**Status**: Not started
+
+**Goal**: Add persistent configuration and theme customization
+
+Planned Features:
+- [ ] Configuration file support (`~/.config/k8s-tui/config.yaml`)
+  - [ ] Default namespace preference
+  - [ ] Default context preference
+  - [ ] Refresh interval configuration
+  - [ ] Keyboard shortcut customization
+  - [ ] Column visibility/ordering
+- [ ] Theme system
+  - [ ] Multiple built-in themes (dark, light, high-contrast)
+  - [ ] Custom color schemes
+  - [ ] Theme preview and switching ('t' key)
+  - [ ] Per-resource-type color customization
+- [ ] UI preferences
+  - [ ] Timestamp format options (relative vs absolute)
+  - [ ] Table layout preferences
+  - [ ] Font/Unicode symbol fallbacks
+
+**Branch**: Will be developed on `dev` branch
+
+---
+
+### Phase 6 - Additional Resources (v0.6.0) 📋 **PLANNED**
+**Status**: Not started
+
+**Goal**: Support more Kubernetes resource types
+
+Planned Features:
+- [ ] ConfigMaps and Secrets (read-only view, no secret values)
+- [ ] Jobs and CronJobs
+- [ ] DaemonSets and ReplicaSets
+- [ ] Ingresses and NetworkPolicies
+- [ ] PersistentVolumes and PersistentVolumeClaims
+- [ ] Nodes (cluster-level view)
+- [ ] Resource filtering by labels/annotations
+
+**Branch**: Will be developed on `dev` branch
+
+---
+
+### Phase 7 - Write Operations (v0.7.0) 🔒 **FUTURE**
+**Status**: Not started - **High-risk phase requiring careful design**
+
+**Goal**: Add controlled write operations for resource management
+
+**IMPORTANT**: This phase requires:
+- Confirmation dialogs for all destructive operations
+- Dry-run mode
+- Audit logging
+- Optional write-protection mode
+- Extensive testing
+
+Planned Features:
+- [ ] Pod operations
+  - [ ] Delete pod (with confirmation)
+  - [ ] Restart pod (delete and wait for recreation)
+  - [ ] Port-forward setup
+- [ ] Deployment operations
+  - [ ] Scale replicas up/down
+  - [ ] Restart rollout
+  - [ ] Pause/resume rollout
+- [ ] Safety features
+  - [ ] Confirmation prompts for all write operations
+  - [ ] Dry-run preview mode
+  - [ ] Write operation audit log
+  - [ ] Read-only mode flag (`--read-only`)
+
+**Branch**: Will be developed on `dev` branch with extra caution
+
+---
+
+## Current Status Summary
+
+| Phase | Version | Status | Branch | In Main |
+|-------|---------|--------|--------|---------|
+| Phase 1 - Foundation | v0.1.0 | ✅ Complete | `main` | ✅ Yes |
+| Phase 2 - Core Features | v0.2.0 | ✅ Complete | `dev` | ❌ No (ready for PR) |
+| Phase 3 - Observability | v0.3.0 | 📋 Planned | - | ❌ No |
+| Phase 4 - Watch API | v0.4.0 | 📋 Planned | - | ❌ No |
+| Phase 5 - Configuration | v0.5.0 | 📋 Planned | - | ❌ No |
+| Phase 6 - More Resources | v0.6.0 | 📋 Planned | - | ❌ No |
+| Phase 7 - Write Ops | v0.7.0 | 📋 Planned | - | ❌ No |
+
+**Current Focus**: Merging Phase 2 to `main` branch
