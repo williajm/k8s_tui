@@ -141,7 +141,7 @@ func TestStylesStatusStyle(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.status, func(t *testing.T) {
+		t.Run(tt.status, func(_ *testing.T) {
 			// Just verify that calling StatusStyle doesn't panic
 			_ = styles.StatusStyle(tt.status)
 		})

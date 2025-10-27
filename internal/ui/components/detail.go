@@ -29,6 +29,8 @@ func (d *DetailView) SetSize(width, height int) {
 }
 
 // ViewPod renders pod details
+//
+//nolint:gocritic // Multiple appends for clarity
 func (d *DetailView) ViewPod(pod *models.PodInfo) string {
 	if pod == nil {
 		return d.emptyView("No pod selected")
@@ -75,6 +77,8 @@ func (d *DetailView) ViewPod(pod *models.PodInfo) string {
 }
 
 // ViewService renders service details
+//
+//nolint:gocritic // Multiple appends for clarity
 func (d *DetailView) ViewService(service *models.ServiceInfo) string {
 	if service == nil {
 		return d.emptyView("No service selected")
@@ -114,6 +118,8 @@ func (d *DetailView) ViewService(service *models.ServiceInfo) string {
 }
 
 // ViewDeployment renders deployment details
+//
+//nolint:gocritic // Multiple appends for clarity
 func (d *DetailView) ViewDeployment(deployment *models.DeploymentInfo) string {
 	if deployment == nil {
 		return d.emptyView("No deployment selected")
@@ -144,6 +150,8 @@ func (d *DetailView) ViewDeployment(deployment *models.DeploymentInfo) string {
 }
 
 // ViewStatefulSet renders statefulset details
+//
+//nolint:gocritic // Multiple appends for clarity
 func (d *DetailView) ViewStatefulSet(statefulSet *models.StatefulSetInfo) string {
 	if statefulSet == nil {
 		return d.emptyView("No statefulset selected")

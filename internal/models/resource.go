@@ -190,10 +190,8 @@ func NewServiceInfo(service *corev1.Service) ServiceInfo {
 	info.Ports = strings.Join(ports, ",")
 
 	// Get external IPs
-	var externalIPs []string
-	for _, ip := range service.Spec.ExternalIPs {
-		externalIPs = append(externalIPs, ip)
-	}
+	externalIPs := make([]string, 0, len(service.Spec.ExternalIPs)+len(service.Status.LoadBalancer.Ingress))
+	externalIPs = append(externalIPs, service.Spec.ExternalIPs...)
 	if len(service.Status.LoadBalancer.Ingress) > 0 {
 		for _, ingress := range service.Status.LoadBalancer.Ingress {
 			if ingress.IP != "" {

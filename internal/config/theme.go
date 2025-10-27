@@ -95,6 +95,8 @@ func GetColorScheme(themeType ThemeType) (ColorScheme, error) {
 }
 
 // ApplyColorScheme applies a color scheme to create styled components
+//
+//nolint:funlen // Style initialization requires many assignments
 func (cs ColorScheme) ApplyColorScheme() Styles {
 	return Styles{
 		Base: lipgloss.NewStyle().

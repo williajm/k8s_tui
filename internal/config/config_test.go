@@ -124,7 +124,7 @@ func TestValidate(t *testing.T) {
 	}{
 		{
 			name:      "valid config",
-			modifyFn:  func(c *Config) {},
+			modifyFn:  func(_ *Config) {},
 			expectErr: false,
 		},
 		{
@@ -217,7 +217,7 @@ func TestLoadWithMissingFields(t *testing.T) {
 	content := `ui:
   theme: light
 `
-	if err := os.WriteFile(configPath, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(configPath, []byte(content), 0600); err != nil {
 		t.Fatalf("failed to write test config: %v", err)
 	}
 

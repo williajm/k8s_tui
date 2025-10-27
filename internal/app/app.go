@@ -117,6 +117,8 @@ func (m Model) Init() tea.Cmd {
 }
 
 // Update handles messages and updates the model
+//
+//nolint:gocyclo // Complex state machine, acceptable for main update function
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Handle namespace selector first if visible
 	if m.namespaceSelector.IsVisible() {
@@ -147,8 +149,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.detailView.SetSize(m.width, remainingHeight)
 
 		// Selector size
-		selectorWidth := min(m.width-10, 50)
-		selectorHeight := min(m.height-6, 20)
+		selectorWidth := minInt(m.width-10, 50)
+		selectorHeight := minInt(m.height-6, 20)
 		m.namespaceSelector.SetSize(selectorWidth, selectorHeight)
 
 	case resourcesLoadedMsg:
@@ -195,6 +197,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // handleKeyPress processes keyboard input
+//
+//nolint:gocyclo // Handles many keyboard commands, complexity is acceptable
 func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Global keys
 	switch {
@@ -324,9 +328,8 @@ func (m Model) handleNamespaceSelector(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // handleSearchMode handles input when in search mode
 func (m Model) handleSearchMode(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		switch msg.Type {
+	if keyMsg, ok := msg.(tea.KeyMsg); ok {
+		switch keyMsg.Type {
 		case tea.KeyEsc:
 			// Exit search mode
 			m.searchMode = false
@@ -346,7 +349,7 @@ func (m Model) handleSearchMode(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case tea.KeyRunes:
 			// Add character to search query
-			m.searchQuery += string(msg.Runes)
+			m.searchQuery += string(keyMsg.Runes)
 		}
 	}
 
@@ -553,8 +556,8 @@ func (m Model) tickCmd() tea.Cmd {
 	})
 }
 
-// min returns the minimum of two integers
-func min(a, b int) int {
+// minInt returns the minimum of two integers
+func minInt(a, b int) int {
 	if a < b {
 		return a
 	}

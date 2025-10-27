@@ -334,6 +334,8 @@ func (l *ResourceList) renderHeader() string {
 }
 
 // renderRow renders a single row based on resource type
+//
+//nolint:funlen // Handles rendering for multiple resource types
 func (l *ResourceList) renderRow(idx int, selected bool) string {
 	var row string
 	var symbol string
