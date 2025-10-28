@@ -193,7 +193,7 @@ func (l *PodList) View() string {
 func (l *PodList) renderHeader() string {
 	nameWidth := 30
 	readyWidth := 8
-	statusWidth := 15
+	statusWidth := 20
 	restartsWidth := 10
 	ageWidth := 8
 
@@ -216,7 +216,7 @@ func (l *PodList) renderHeader() string {
 func (l *PodList) renderRow(pod models.PodInfo, selected bool) string {
 	nameWidth := 30
 	readyWidth := 8
-	statusWidth := 15
+	statusWidth := 20
 	restartsWidth := 10
 	ageWidth := 8
 
@@ -232,13 +232,14 @@ func (l *PodList) renderRow(pod models.PodInfo, selected bool) string {
 	// Status with color
 	statusText := pod.Status
 	statusStyle := styles.StatusStyle(pod.Status)
+	statusRendered := statusStyle.Width(statusWidth).Render(statusText)
 
 	row := fmt.Sprintf(
-		"%s %-*s %-*s %-*s %-*d %-*s",
+		"%s %-*s %-*s %s %*d %-*s",
 		symbol,
 		nameWidth, name,
 		readyWidth, pod.Ready,
-		statusWidth, statusStyle.Render(statusText),
+		statusRendered,
 		restartsWidth, pod.Restarts,
 		ageWidth, pod.Age,
 	)
