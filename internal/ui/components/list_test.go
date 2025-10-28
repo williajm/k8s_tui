@@ -200,3 +200,120 @@ func TestPodList_PageNavigation(t *testing.T) {
 		t.Errorf("After PageUp(), selectedIdx = %d, want 0", list.selectedIdx)
 	}
 }
+
+func TestPodList_View_EmptyList(t *testing.T) {
+	list := NewPodList()
+	list.SetSize(80, 20)
+
+	view := list.View()
+	if view == "" {
+		t.Fatal("View() returned empty string")
+	}
+}
+
+func TestPodList_View_WithPods(t *testing.T) {
+	list := NewPodList()
+	list.SetSize(100, 25)
+
+	pods := []models.PodInfo{
+		{Name: "test-pod-1", Namespace: "default", Status: "Running", Ready: "1/1", Restarts: 0, Age: "5m"},
+		{Name: "test-pod-2", Namespace: "default", Status: "Pending", Ready: "0/1", Restarts: 2, Age: "2m"},
+		{Name: "test-pod-3", Namespace: "kube-system", Status: "Running", Ready: "1/1", Restarts: 0, Age: "10h"},
+	}
+	list.SetPods(pods)
+
+	view := list.View()
+	if view == "" {
+		t.Fatal("View() returned empty string")
+	}
+}
+
+func TestPodList_View_WithSearchFilter(t *testing.T) {
+	list := NewPodList()
+	list.SetSize(100, 25)
+
+	pods := []models.PodInfo{
+		{Name: "nginx-pod", Namespace: "default", Status: "Running"},
+		{Name: "redis-pod", Namespace: "default", Status: "Running"},
+		{Name: "postgres-pod", Namespace: "database", Status: "Pending"},
+	}
+	list.SetPods(pods)
+	list.SetSearchFilter("nginx")
+
+	view := list.View()
+	if view == "" {
+		t.Fatal("View() with filter returned empty string")
+	}
+}
+
+func TestPodList_SetSize(t *testing.T) {
+	list := NewPodList()
+
+	tests := []struct {
+		name   string
+		width  int
+		height int
+	}{
+		{
+			name:   "standard size",
+			width:  120,
+			height: 30,
+		},
+		{
+			name:   "small size",
+			width:  40,
+			height: 10,
+		},
+		{
+			name:   "large size",
+			width:  200,
+			height: 50,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			list.SetSize(tt.width, tt.height)
+
+			if list.width != tt.width {
+				t.Errorf("SetSize() width = %d, want %d", list.width, tt.width)
+			}
+
+			if list.height != tt.height {
+				t.Errorf("SetSize() height = %d, want %d", list.height, tt.height)
+			}
+		})
+	}
+}
+
+func TestPodList_SetSearchFilter(t *testing.T) {
+	list := NewPodList()
+
+	tests := []struct {
+		name   string
+		filter string
+	}{
+		{
+			name:   "simple filter",
+			filter: "nginx",
+		},
+		{
+			name:   "empty filter",
+			filter: "",
+		},
+		{
+			name:   "complex filter",
+			filter: "kube-system",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			list.SetSearchFilter(tt.filter)
+
+			if list.searchFilter != tt.filter {
+				t.Errorf("SetSearchFilter() searchFilter = %s, want %s", list.searchFilter, tt.filter)
+			}
+		})
+	}
+}

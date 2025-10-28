@@ -10,6 +10,10 @@
 
 A fast, keyboard-driven terminal user interface for Kubernetes cluster management.
 
+## Screenshot
+
+![K8S-TUI Screenshot](assets/tui.png)
+
 ## Features
 
 ### ✅ Available Now (v0.2.0)
