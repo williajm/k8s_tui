@@ -3,6 +3,9 @@ package components
 import (
 	"testing"
 
+	appsv1 "k8s.io/api/apps/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	"github.com/williajm/k8s-tui/internal/models"
 )
 
@@ -488,5 +491,145 @@ func TestResourceList_MultipleResourceTypes(t *testing.T) {
 	pod = list.GetSelectedPod()
 	if pod == nil || pod.Name != "pod1" {
 		t.Error("After switching back to Pod, should select pod1")
+	}
+}
+
+func TestResourceList_View_EmptyList(t *testing.T) {
+	list := NewResourceList(ResourceTypePod)
+	list.SetSize(80, 20)
+
+	view := list.View()
+	if view == "" {
+		t.Fatal("View() returned empty string")
+	}
+
+	// Should show "No resources found" message
+	// We can't check exact content due to styling, but view should not be empty
+}
+
+func TestResourceList_View_WithPods(t *testing.T) {
+	list := NewResourceList(ResourceTypePod)
+	list.SetSize(100, 25)
+
+	pods := []models.PodInfo{
+		{Name: "test-pod-1", Namespace: "default", Status: "Running", Ready: "1/1", Restarts: 0, Age: "5m"},
+		{Name: "test-pod-2", Namespace: "default", Status: "Pending", Ready: "0/1", Restarts: 2, Age: "2m"},
+	}
+	list.SetPods(pods)
+
+	view := list.View()
+	if view == "" {
+		t.Fatal("View() returned empty string")
+	}
+
+	// View should contain some content (we can't test exact rendering due to styling)
+}
+
+func TestResourceList_View_WithServices(t *testing.T) {
+	list := NewResourceList(ResourceTypeService)
+	list.SetSize(120, 30)
+
+	services := []models.ServiceInfo{
+		{Name: "nginx-svc", Namespace: "default", Type: "ClusterIP", ClusterIP: "10.0.1.1", ExternalIP: "<none>", Ports: "80/TCP", Age: "1h"},
+	}
+	list.SetServices(services)
+
+	view := list.View()
+	if view == "" {
+		t.Fatal("View() returned empty string")
+	}
+}
+
+func TestResourceList_View_WithDeployments(t *testing.T) {
+	list := NewResourceList(ResourceTypeDeployment)
+	list.SetSize(120, 30)
+
+	deployments := []models.DeploymentInfo{
+		{Name: "nginx-deploy", Namespace: "default", Replicas: 3, Ready: "3/3", UpToDate: 3, Available: 3, Age: "7d"},
+	}
+	list.SetDeployments(deployments)
+
+	view := list.View()
+	if view == "" {
+		t.Fatal("View() returned empty string")
+	}
+}
+
+func TestResourceList_View_WithStatefulSets(t *testing.T) {
+	list := NewResourceList(ResourceTypeStatefulSet)
+	list.SetSize(120, 30)
+
+	// Create a proper StatefulSet with the required fields
+	replicas := int32(3)
+	sts := &appsv1.StatefulSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              "redis-sts",
+			Namespace:         "default",
+			CreationTimestamp: metav1.Now(),
+		},
+		Spec: appsv1.StatefulSetSpec{
+			Replicas: &replicas,
+		},
+		Status: appsv1.StatefulSetStatus{
+			ReadyReplicas: 3,
+		},
+	}
+
+	statefulSets := []models.StatefulSetInfo{
+		models.NewStatefulSetInfo(sts),
+	}
+	list.SetStatefulSets(statefulSets)
+
+	view := list.View()
+	if view == "" {
+		t.Fatal("View() returned empty string")
+	}
+}
+
+func TestResourceList_View_AllResourceTypes(t *testing.T) {
+	resourceTypes := []ResourceType{
+		ResourceTypePod,
+		ResourceTypeService,
+		ResourceTypeDeployment,
+		ResourceTypeStatefulSet,
+	}
+
+	resourceNames := []string{"Pod", "Service", "Deployment", "StatefulSet"}
+	for i, rt := range resourceTypes {
+		t.Run(resourceNames[i], func(t *testing.T) {
+			list := NewResourceList(rt)
+			list.SetSize(120, 30)
+
+			// Add sample data for each type
+			switch rt {
+			case ResourceTypePod:
+				list.SetPods([]models.PodInfo{{Name: "test-pod", Status: "Running"}})
+			case ResourceTypeService:
+				list.SetServices([]models.ServiceInfo{{Name: "test-svc", Type: "ClusterIP"}})
+			case ResourceTypeDeployment:
+				list.SetDeployments([]models.DeploymentInfo{{Name: "test-deploy", Replicas: 1}})
+			case ResourceTypeStatefulSet:
+				replicas := int32(1)
+				sts := &appsv1.StatefulSet{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:              "test-sts",
+						Namespace:         "default",
+						CreationTimestamp: metav1.Now(),
+					},
+					Spec: appsv1.StatefulSetSpec{
+						Replicas: &replicas,
+					},
+					Status: appsv1.StatefulSetStatus{
+						ReadyReplicas: 1,
+					},
+				}
+				list.SetStatefulSets([]models.StatefulSetInfo{models.NewStatefulSetInfo(sts)})
+			}
+
+			view := list.View()
+			if view == "" {
+				t.Errorf("View() for %s returned empty string", resourceNames[i])
+			}
+		})
 	}
 }
