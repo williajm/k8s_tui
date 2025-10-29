@@ -633,3 +633,243 @@ func TestResourceList_View_AllResourceTypes(t *testing.T) {
 		})
 	}
 }
+
+func TestResourceList_AddOrUpdatePod(t *testing.T) {
+	list := NewResourceList(ResourceTypePod)
+
+	// Add new pod
+	pod1 := models.PodInfo{Name: "pod1", Namespace: "default", Status: "Running"}
+	list.AddOrUpdatePod(pod1)
+
+	if len(list.pods) != 1 {
+		t.Fatalf("After adding pod, expected 1 pod, got %d", len(list.pods))
+	}
+	if list.pods[0].Name != "pod1" {
+		t.Errorf("Expected pod name 'pod1', got '%s'", list.pods[0].Name)
+	}
+
+	// Update existing pod
+	pod1Updated := models.PodInfo{Name: "pod1", Namespace: "default", Status: "Failed"}
+	list.AddOrUpdatePod(pod1Updated)
+
+	if len(list.pods) != 1 {
+		t.Fatalf("After updating pod, expected 1 pod, got %d", len(list.pods))
+	}
+	if list.pods[0].Status != "Failed" {
+		t.Errorf("Expected pod status 'Failed', got '%s'", list.pods[0].Status)
+	}
+
+	// Add another pod
+	pod2 := models.PodInfo{Name: "pod2", Namespace: "default", Status: "Pending"}
+	list.AddOrUpdatePod(pod2)
+
+	if len(list.pods) != 2 {
+		t.Fatalf("After adding second pod, expected 2 pods, got %d", len(list.pods))
+	}
+}
+
+func TestResourceList_RemovePod(t *testing.T) {
+	list := NewResourceList(ResourceTypePod)
+
+	pods := []models.PodInfo{
+		{Name: "pod1", Namespace: "default", Status: "Running"},
+		{Name: "pod2", Namespace: "default", Status: "Running"},
+		{Name: "pod3", Namespace: "default", Status: "Running"},
+	}
+	list.SetPods(pods)
+	list.selectedIdx = 1 // Select second pod
+
+	// Remove middle pod
+	list.RemovePod("default", "pod2")
+
+	if len(list.pods) != 2 {
+		t.Fatalf("After removing pod, expected 2 pods, got %d", len(list.pods))
+	}
+	if list.pods[1].Name != "pod3" {
+		t.Errorf("Expected second pod to be 'pod3', got '%s'", list.pods[1].Name)
+	}
+
+	// Remove last pod (should adjust selection)
+	list.selectedIdx = 1
+	list.RemovePod("default", "pod3")
+
+	if len(list.pods) != 1 {
+		t.Fatalf("After removing last pod, expected 1 pod, got %d", len(list.pods))
+	}
+	if list.selectedIdx != 0 {
+		t.Errorf("After removing last pod, selectedIdx should be 0, got %d", list.selectedIdx)
+	}
+
+	// Remove final pod (should reset to 0)
+	list.RemovePod("default", "pod1")
+
+	if len(list.pods) != 0 {
+		t.Fatalf("After removing all pods, expected 0 pods, got %d", len(list.pods))
+	}
+	if list.selectedIdx != 0 {
+		t.Errorf("After removing all pods, selectedIdx should be 0, got %d", list.selectedIdx)
+	}
+
+	// Try to remove non-existent pod (should not panic)
+	list.RemovePod("default", "non-existent")
+}
+
+func TestResourceList_AddOrUpdateService(t *testing.T) {
+	list := NewResourceList(ResourceTypeService)
+
+	svc1 := models.ServiceInfo{Name: "svc1", Namespace: "default", Type: "ClusterIP"}
+	list.AddOrUpdateService(svc1)
+
+	if len(list.services) != 1 {
+		t.Fatalf("Expected 1 service, got %d", len(list.services))
+	}
+
+	svc1Updated := models.ServiceInfo{Name: "svc1", Namespace: "default", Type: "NodePort"}
+	list.AddOrUpdateService(svc1Updated)
+
+	if len(list.services) != 1 {
+		t.Fatalf("Expected 1 service after update, got %d", len(list.services))
+	}
+	if list.services[0].Type != "NodePort" {
+		t.Errorf("Expected type 'NodePort', got '%s'", list.services[0].Type)
+	}
+}
+
+func TestResourceList_RemoveService(t *testing.T) {
+	list := NewResourceList(ResourceTypeService)
+
+	services := []models.ServiceInfo{
+		{Name: "svc1", Namespace: "default", Type: "ClusterIP"},
+		{Name: "svc2", Namespace: "default", Type: "NodePort"},
+	}
+	list.SetServices(services)
+
+	list.RemoveService("default", "svc1")
+
+	if len(list.services) != 1 {
+		t.Fatalf("Expected 1 service after removal, got %d", len(list.services))
+	}
+	if list.services[0].Name != "svc2" {
+		t.Errorf("Expected service name 'svc2', got '%s'", list.services[0].Name)
+	}
+}
+
+func TestResourceList_AddOrUpdateDeployment(t *testing.T) {
+	list := NewResourceList(ResourceTypeDeployment)
+
+	dep1 := models.DeploymentInfo{Name: "deploy1", Namespace: "default", Replicas: 3}
+	list.AddOrUpdateDeployment(dep1)
+
+	if len(list.deployments) != 1 {
+		t.Fatalf("Expected 1 deployment, got %d", len(list.deployments))
+	}
+
+	dep1Updated := models.DeploymentInfo{Name: "deploy1", Namespace: "default", Replicas: 5}
+	list.AddOrUpdateDeployment(dep1Updated)
+
+	if len(list.deployments) != 1 {
+		t.Fatalf("Expected 1 deployment after update, got %d", len(list.deployments))
+	}
+	if list.deployments[0].Replicas != 5 {
+		t.Errorf("Expected replicas 5, got %d", list.deployments[0].Replicas)
+	}
+}
+
+func TestResourceList_RemoveDeployment(t *testing.T) {
+	list := NewResourceList(ResourceTypeDeployment)
+
+	deployments := []models.DeploymentInfo{
+		{Name: "deploy1", Namespace: "default", Replicas: 3},
+		{Name: "deploy2", Namespace: "default", Replicas: 2},
+	}
+	list.SetDeployments(deployments)
+
+	list.RemoveDeployment("default", "deploy1")
+
+	if len(list.deployments) != 1 {
+		t.Fatalf("Expected 1 deployment after removal, got %d", len(list.deployments))
+	}
+	if list.deployments[0].Name != "deploy2" {
+		t.Errorf("Expected deployment name 'deploy2', got '%s'", list.deployments[0].Name)
+	}
+}
+
+func TestResourceList_AddOrUpdateStatefulSet(t *testing.T) {
+	list := NewResourceList(ResourceTypeStatefulSet)
+
+	sts1 := models.StatefulSetInfo{Name: "sts1", Namespace: "default", Replicas: 3}
+	list.AddOrUpdateStatefulSet(sts1)
+
+	if len(list.statefulSets) != 1 {
+		t.Fatalf("Expected 1 statefulset, got %d", len(list.statefulSets))
+	}
+
+	sts1Updated := models.StatefulSetInfo{Name: "sts1", Namespace: "default", Replicas: 5}
+	list.AddOrUpdateStatefulSet(sts1Updated)
+
+	if len(list.statefulSets) != 1 {
+		t.Fatalf("Expected 1 statefulset after update, got %d", len(list.statefulSets))
+	}
+	if list.statefulSets[0].Replicas != 5 {
+		t.Errorf("Expected replicas 5, got %d", list.statefulSets[0].Replicas)
+	}
+}
+
+func TestResourceList_RemoveStatefulSet(t *testing.T) {
+	list := NewResourceList(ResourceTypeStatefulSet)
+
+	statefulSets := []models.StatefulSetInfo{
+		{Name: "sts1", Namespace: "default", Replicas: 3},
+		{Name: "sts2", Namespace: "default", Replicas: 2},
+	}
+	list.SetStatefulSets(statefulSets)
+
+	list.RemoveStatefulSet("default", "sts1")
+
+	if len(list.statefulSets) != 1 {
+		t.Fatalf("Expected 1 statefulset after removal, got %d", len(list.statefulSets))
+	}
+	if list.statefulSets[0].Name != "sts2" {
+		t.Errorf("Expected statefulset name 'sts2', got '%s'", list.statefulSets[0].Name)
+	}
+}
+
+func TestResourceList_AddOrUpdateEvent(t *testing.T) {
+	list := NewResourceList(ResourceTypeEvent)
+
+	evt1 := models.EventInfo{Name: "evt1", Namespace: "default", Type: "Normal", Reason: "Created"}
+	list.AddOrUpdateEvent(evt1)
+
+	if len(list.events) != 1 {
+		t.Fatalf("Expected 1 event, got %d", len(list.events))
+	}
+
+	evt1Updated := models.EventInfo{Name: "evt1", Namespace: "default", Type: "Warning", Reason: "Failed"}
+	list.AddOrUpdateEvent(evt1Updated)
+
+	if len(list.events) != 1 {
+		t.Fatalf("Expected 1 event after update, got %d", len(list.events))
+	}
+	if list.events[0].Type != "Warning" {
+		t.Errorf("Expected type 'Warning', got '%s'", list.events[0].Type)
+	}
+}
+
+func TestResourceList_RemoveEvent(t *testing.T) {
+	list := NewResourceList(ResourceTypeEvent)
+
+	events := []models.EventInfo{
+		{Name: "evt1", Namespace: "default", Type: "Normal"},
+		{Name: "evt2", Namespace: "default", Type: "Warning"},
+	}
+	list.SetEvents(events)
+
+	list.RemoveEvent("default", "evt1")
+
+	if len(list.events) != 1 {
+		t.Fatalf("Expected 1 event after removal, got %d", len(list.events))
+	}
+	if list.events[0].Name != "evt2" {
+		t.Errorf("Expected event name 'evt2', got '%s'", list.events[0].Name)
+	}
+}

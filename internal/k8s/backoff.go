@@ -35,10 +35,10 @@ func NewExponentialBackoff() *ExponentialBackoff {
 }
 
 // NewExponentialBackoffWithConfig creates a backoff with custom parameters.
-func NewExponentialBackoffWithConfig(initial, max time.Duration, multiplier, jitter float64) *ExponentialBackoff {
+func NewExponentialBackoffWithConfig(initial, maxDelay time.Duration, multiplier, jitter float64) *ExponentialBackoff {
 	return &ExponentialBackoff{
 		initialDelay: initial,
-		maxDelay:     max,
+		maxDelay:     maxDelay,
 		multiplier:   multiplier,
 		jitter:       jitter,
 		attempts:     0,
@@ -63,8 +63,9 @@ func (eb *ExponentialBackoff) Next() time.Duration {
 	}
 
 	// Add jitter: ±10% randomization
+	// Note: Using math/rand for non-cryptographic jitter is acceptable
 	jitterRange := delay * eb.jitter
-	jitterValue := (rand.Float64() * 2 * jitterRange) - jitterRange
+	jitterValue := (rand.Float64() * 2 * jitterRange) - jitterRange //nolint:gosec
 	delay += jitterValue
 
 	// Ensure minimum of 0

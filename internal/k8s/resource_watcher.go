@@ -169,8 +169,8 @@ func (rw *ResourceWatcher) setResourceVersion(version string) {
 	rw.resourceVersion = version
 }
 
-// debugLog logs a message if debug mode is enabled
-func (rw *ResourceWatcher) debugLog(format string, args ...interface{}) {
+// debugLogf logs a formatted message if debug mode is enabled
+func (rw *ResourceWatcher) debugLogf(format string, args ...interface{}) {
 	rw.mu.RLock()
 	debug := rw.debugMode
 	rw.mu.RUnlock()
@@ -187,13 +187,13 @@ func (rw *ResourceWatcher) watchLoop(ctx context.Context, eventChan chan<- Watch
 	for {
 		select {
 		case <-ctx.Done():
-			rw.debugLog("Context cancelled, stopping watch")
+			rw.debugLogf("Context canceled, stopping watch")
 			rw.setState(StateDisconnected)
 			return
 		default:
 			// Attempt to connect and watch
 			if err := rw.connectAndWatch(ctx, eventChan, errorChan); err != nil {
-				// Check if context was cancelled
+				// Check if context was canceled
 				if ctx.Err() != nil {
 					rw.setState(StateDisconnected)
 					return
@@ -209,14 +209,14 @@ func (rw *ResourceWatcher) watchLoop(ctx context.Context, eventChan chan<- Watch
 
 				if fatal {
 					rw.setState(StateError)
-					rw.debugLog("Fatal error, stopping watch: %v", err)
+					rw.debugLogf("Fatal error, stopping watch: %v", err)
 					return
 				}
 
 				// Non-fatal error, attempt reconnection with backoff
 				rw.setState(StateReconnecting)
 				delay := rw.backoff.Next()
-				rw.debugLog("Reconnecting in %v (attempt %d)", delay, rw.backoff.Attempts())
+				rw.debugLogf("Reconnecting in %v (attempt %d)", delay, rw.backoff.Attempts())
 
 				select {
 				case <-ctx.Done():
@@ -227,7 +227,7 @@ func (rw *ResourceWatcher) watchLoop(ctx context.Context, eventChan chan<- Watch
 				}
 			} else {
 				// Connection closed cleanly, reconnect immediately
-				rw.debugLog("Watch connection closed cleanly, reconnecting")
+				rw.debugLogf("Watch connection closed cleanly, reconnecting")
 				rw.setState(StateConnecting)
 			}
 		}
@@ -253,7 +253,7 @@ func (rw *ResourceWatcher) connectAndWatch(ctx context.Context, eventChan chan<-
 
 	rw.setState(StateConnected)
 	rw.backoff.Reset()
-	rw.debugLog("Watch started with resourceVersion=%s", rw.GetResourceVersion())
+	rw.debugLogf("Watch started with resourceVersion=%s", rw.GetResourceVersion())
 
 	// Process events from the watch stream
 	for {
@@ -263,7 +263,7 @@ func (rw *ResourceWatcher) connectAndWatch(ctx context.Context, eventChan chan<-
 		case event, ok := <-watcher.ResultChan():
 			if !ok {
 				// Channel closed, connection terminated
-				rw.debugLog("Watch channel closed")
+				rw.debugLogf("Watch channel closed")
 				return nil
 			}
 
@@ -275,8 +275,10 @@ func (rw *ResourceWatcher) connectAndWatch(ctx context.Context, eventChan chan<-
 }
 
 // performInitialList performs a list operation to get the current resource version
+//
+//nolint:gocyclo // Acceptable complexity for resource type switching
 func (rw *ResourceWatcher) performInitialList(ctx context.Context, eventChan chan<- WatchEvent) error {
-	rw.debugLog("Performing initial list")
+	rw.debugLogf("Performing initial list")
 
 	switch rw.resourceType {
 	case ResourceTypePod:
@@ -285,7 +287,7 @@ func (rw *ResourceWatcher) performInitialList(ctx context.Context, eventChan cha
 			return err
 		}
 		rw.setResourceVersion(list.ResourceVersion)
-		rw.debugLog("Initial list returned %d items, resourceVersion=%s", len(list.Items), list.ResourceVersion)
+		rw.debugLogf("Initial list returned %d items, resourceVersion=%s", len(list.Items), list.ResourceVersion)
 
 		// Send ADDED events for existing items
 		for i := range list.Items {
@@ -302,7 +304,7 @@ func (rw *ResourceWatcher) performInitialList(ctx context.Context, eventChan cha
 			return err
 		}
 		rw.setResourceVersion(list.ResourceVersion)
-		rw.debugLog("Initial list returned %d items, resourceVersion=%s", len(list.Items), list.ResourceVersion)
+		rw.debugLogf("Initial list returned %d items, resourceVersion=%s", len(list.Items), list.ResourceVersion)
 
 		for i := range list.Items {
 			eventChan <- WatchEvent{
@@ -318,7 +320,7 @@ func (rw *ResourceWatcher) performInitialList(ctx context.Context, eventChan cha
 			return err
 		}
 		rw.setResourceVersion(list.ResourceVersion)
-		rw.debugLog("Initial list returned %d items, resourceVersion=%s", len(list.Items), list.ResourceVersion)
+		rw.debugLogf("Initial list returned %d items, resourceVersion=%s", len(list.Items), list.ResourceVersion)
 
 		for i := range list.Items {
 			eventChan <- WatchEvent{
@@ -334,7 +336,7 @@ func (rw *ResourceWatcher) performInitialList(ctx context.Context, eventChan cha
 			return err
 		}
 		rw.setResourceVersion(list.ResourceVersion)
-		rw.debugLog("Initial list returned %d items, resourceVersion=%s", len(list.Items), list.ResourceVersion)
+		rw.debugLogf("Initial list returned %d items, resourceVersion=%s", len(list.Items), list.ResourceVersion)
 
 		for i := range list.Items {
 			eventChan <- WatchEvent{
@@ -350,7 +352,7 @@ func (rw *ResourceWatcher) performInitialList(ctx context.Context, eventChan cha
 			return err
 		}
 		rw.setResourceVersion(list.ResourceVersion)
-		rw.debugLog("Initial list returned %d items, resourceVersion=%s", len(list.Items), list.ResourceVersion)
+		rw.debugLogf("Initial list returned %d items, resourceVersion=%s", len(list.Items), list.ResourceVersion)
 
 		for i := range list.Items {
 			eventChan <- WatchEvent{
@@ -388,15 +390,15 @@ func (rw *ResourceWatcher) createWatcher(ctx context.Context) (watch.Interface, 
 }
 
 // handleWatchEvent processes a single watch event
-func (rw *ResourceWatcher) handleWatchEvent(event watch.Event, eventChan chan<- WatchEvent, errorChan chan<- WatchError) error {
+func (rw *ResourceWatcher) handleWatchEvent(event watch.Event, eventChan chan<- WatchEvent, _ chan<- WatchError) error {
 	switch event.Type {
 	case watch.Added, watch.Modified, watch.Deleted:
 		// Update resource version from object metadata
 		if err := rw.updateResourceVersionFromObject(event.Object); err != nil {
-			rw.debugLog("Warning: failed to update resource version: %v", err)
+			rw.debugLogf("Warning: failed to update resource version: %v", err)
 		}
 
-		rw.debugLog("Event %s - %s", event.Type, getObjectName(event.Object))
+		rw.debugLogf("Event %s - %s", event.Type, getObjectName(event.Object))
 
 		eventChan <- WatchEvent{
 			ResourceType: rw.resourceType,
@@ -413,7 +415,7 @@ func (rw *ResourceWatcher) handleWatchEvent(event watch.Event, eventChan chan<- 
 
 		// Check for 410 Gone (resourceVersion too old)
 		if statusErr.Code == 410 {
-			rw.debugLog("ResourceVersion expired (410 Gone), performing full re-list")
+			rw.debugLogf("ResourceVersion expired (410 Gone), performing full re-list")
 			rw.setResourceVersion("")
 			return fmt.Errorf("resource version expired")
 		}
@@ -423,11 +425,11 @@ func (rw *ResourceWatcher) handleWatchEvent(event watch.Event, eventChan chan<- 
 	case watch.Bookmark:
 		// Bookmark events contain updated resource version
 		if err := rw.updateResourceVersionFromObject(event.Object); err == nil {
-			rw.debugLog("Bookmark received, resourceVersion=%s", rw.GetResourceVersion())
+			rw.debugLogf("Bookmark received, resourceVersion=%s", rw.GetResourceVersion())
 		}
 
 	default:
-		rw.debugLog("Unknown event type: %v", event.Type)
+		rw.debugLogf("Unknown event type: %v", event.Type)
 	}
 
 	return nil

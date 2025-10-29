@@ -8,6 +8,9 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+
 	"github.com/williajm/k8s-tui/internal/config"
 	"github.com/williajm/k8s-tui/internal/k8s"
 	"github.com/williajm/k8s-tui/internal/models"
@@ -41,6 +44,7 @@ type Model struct {
 	logViewer         *components.LogViewer
 	describeViewer    *components.DescribeViewer
 	containerSelector *components.ContainerSelector
+	watchManager      *k8s.WatchManager
 	width             int
 	height            int
 	err               error
@@ -54,6 +58,7 @@ type Model struct {
 	logStreamCancel   context.CancelFunc
 	logStreamActive   bool
 	previousViewMode  ViewMode
+	useWatchAPI       bool
 }
 
 // Message types
@@ -102,6 +107,18 @@ type tickMsg time.Time
 
 type errMsg struct{ err error }
 
+type watchEventMsg struct {
+	event k8s.WatchEvent
+}
+
+type watchErrorMsg struct {
+	error k8s.WatchError
+}
+
+type connectionStateMsg struct {
+	state k8s.ConnectionState
+}
+
 // NewModel creates a new application model with default configuration
 func NewModel(client *k8s.Client) Model {
 	return NewModelWithConfig(client, config.DefaultConfig())
@@ -126,6 +143,12 @@ func NewModelWithConfig(client *k8s.Client, cfg *config.Config) Model {
 		false, // Will be set to true after first successful load
 	)
 
+	// Create watch manager
+	watchManager := k8s.NewWatchManager(client)
+
+	// Enable watch API by default (can be overridden by config or flag later)
+	useWatchAPI := true
+
 	return Model{
 		client:            client,
 		config:            cfg,
@@ -140,6 +163,7 @@ func NewModelWithConfig(client *k8s.Client, cfg *config.Config) Model {
 		logViewer:         nil, // Created on demand
 		describeViewer:    components.NewDescribeViewer(),
 		containerSelector: nil, // Created on demand
+		watchManager:      watchManager,
 		connected:         false,
 		loading:           true,
 		viewMode:          ViewModeList,
@@ -147,11 +171,21 @@ func NewModelWithConfig(client *k8s.Client, cfg *config.Config) Model {
 		refreshInterval:   cfg.GetRefreshInterval(),
 		logStreamActive:   false,
 		previousViewMode:  ViewModeList,
+		useWatchAPI:       useWatchAPI,
 	}
 }
 
 // Init initializes the application
 func (m Model) Init() tea.Cmd {
+	if m.useWatchAPI {
+		// Start watch-based updates
+		return tea.Batch(
+			m.startWatchMode(),
+			m.waitForWatchEvents(),
+		)
+	}
+
+	// Fallback to polling mode
 	return tea.Batch(
 		m.loadResources(),
 		m.tickCmd(),
@@ -274,8 +308,35 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.namespaceSelector.SetOptions(msg.namespaces)
 		}
 
+	case watchEventMsg:
+		// Handle watch events (ADDED, MODIFIED, DELETED)
+		m.handleWatchEvent(msg.event)
+		// Continue waiting for more events
+		return m, m.waitForWatchEvents()
+
+	case watchErrorMsg:
+		// Handle watch errors
+		if msg.error.Fatal {
+			m.err = msg.error.Err
+			m.connected = false
+		}
+		// Continue waiting for more events even on non-fatal errors
+		return m, m.waitForWatchEvents()
+
+	case connectionStateMsg:
+		// Update connection state in header
+		m.updateConnectionState(msg.state)
+		return m, nil
+
 	case tickMsg:
-		// Auto-refresh based on configured interval
+		// In watch mode, tick is used for connection state updates
+		if m.useWatchAPI {
+			return m, tea.Batch(
+				m.checkConnectionState(),
+				m.tickCmd(),
+			)
+		}
+		// In polling mode, tick triggers resource refresh
 		return m, tea.Batch(
 			m.loadResources(),
 			m.tickCmd(),
@@ -475,15 +536,23 @@ func (m Model) handleNamespaceSelector(msg tea.Msg) (tea.Model, tea.Cmd) {
 				)
 				m.namespaceSelector.Hide()
 				m.loading = true
-				// Use tea.Batch to clear screen and reload resources
-				return m, tea.Batch(tea.ClearScreen, m.loadResources())
+
+				// If using watch mode, restart watchers with new namespace
+				if m.useWatchAPI {
+					// Restart watch manager with new namespace
+					if err := m.watchManager.UpdateNamespace(selectedNS); err != nil {
+						m.err = fmt.Errorf("failed to switch namespace: %w", err)
+					}
+					return m, nil
+				}
+
+				// Otherwise use polling mode to reload resources
+				return m, m.loadResources()
 			}
 
 		case key.Matches(msg, m.keyMap.Back), key.Matches(msg, m.keyMap.Quit):
 			// Cancel namespace selection
 			m.namespaceSelector.Hide()
-			// Clear screen to remove any artifacts
-			return m, tea.ClearScreen
 		}
 
 	case namespacesLoadedMsg:
@@ -564,6 +633,11 @@ func (m Model) View() string {
 	}
 
 	// Build the main view for list and detail modes
+	return m.renderMainView()
+}
+
+// renderMainView renders the main view with header, tabs, content, and footer
+func (m Model) renderMainView() string {
 	header := m.header.View()
 	tabs := m.tabs.View()
 	footer := m.footer.View()
@@ -617,22 +691,9 @@ func (m Model) viewDetail() string {
 
 // viewNamespaceSelector renders the namespace selector
 func (m Model) viewNamespaceSelector() string {
-	// TODO: Fix rendering artifact - When dismissing the namespace selector, a line
-	// from the header (showing context, namespace, and "Connected" status) sometimes
-	// remains visible at the top of the screen. This happens inconsistently with
-	// certain namespace names (longer names or names from k8s system namespaces).
-	// The current lipgloss.Place overlay and tea.ClearScreen approach doesn't fully
-	// resolve the issue. Need to investigate alternative approaches such as:
-	// - Using tea.ClearScrollback in addition to tea.ClearScreen
-	// - Rendering the full background view underneath the overlay
-	// - Using alternate screen buffer for modals
-	// - Manual ANSI escape sequences for screen clearing
-
-	// Render the selector
+	// Render the selector centered on screen
 	selector := m.namespaceSelector.View()
 
-	// Use lipgloss.Place with explicit whitespace filling to ensure full screen coverage
-	// This prevents rendering artifacts when dismissing the selector
 	return lipgloss.Place(
 		m.width,
 		m.height,
@@ -640,17 +701,16 @@ func (m Model) viewNamespaceSelector() string {
 		lipgloss.Center,
 		selector,
 		lipgloss.WithWhitespaceChars(" "),
-		lipgloss.WithWhitespaceForeground(lipgloss.Color("0")),
-		lipgloss.WithWhitespaceBackground(lipgloss.Color("0")),
+		lipgloss.WithWhitespaceForeground(lipgloss.AdaptiveColor{Light: "0", Dark: "0"}),
+		lipgloss.WithWhitespaceBackground(lipgloss.AdaptiveColor{Light: "0", Dark: "0"}),
 	)
 }
 
 // viewContainerSelector renders the container selector
 func (m Model) viewContainerSelector() string {
-	// Render the selector
+	// Render the selector centered on screen
 	selector := m.containerSelector.View()
 
-	// Use lipgloss.Place with explicit whitespace filling to ensure full screen coverage
 	return lipgloss.Place(
 		m.width,
 		m.height,
@@ -658,8 +718,8 @@ func (m Model) viewContainerSelector() string {
 		lipgloss.Center,
 		selector,
 		lipgloss.WithWhitespaceChars(" "),
-		lipgloss.WithWhitespaceForeground(lipgloss.Color("0")),
-		lipgloss.WithWhitespaceBackground(lipgloss.Color("0")),
+		lipgloss.WithWhitespaceForeground(lipgloss.AdaptiveColor{Light: "0", Dark: "0"}),
+		lipgloss.WithWhitespaceBackground(lipgloss.AdaptiveColor{Light: "0", Dark: "0"}),
 	)
 }
 
@@ -1025,4 +1085,155 @@ func (m Model) handleContainerSelectorKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) 
 	}
 
 	return m, nil
+}
+
+// startWatchMode initializes and starts the watch manager
+func (m Model) startWatchMode() tea.Cmd {
+	return func() tea.Msg {
+		ctx := context.Background()
+
+		// Start watching all resource types
+		resourceTypes := []k8s.ResourceType{
+			k8s.ResourceTypePod,
+			k8s.ResourceTypeService,
+			k8s.ResourceTypeDeployment,
+			k8s.ResourceTypeStatefulSet,
+			k8s.ResourceTypeEvent,
+		}
+
+		err := m.watchManager.Start(ctx, resourceTypes)
+		if err != nil {
+			return errMsg{err: fmt.Errorf("failed to start watch manager: %w", err)}
+		}
+
+		return nil
+	}
+}
+
+// waitForWatchEvents waits for the next watch event from any resource watcher
+func (m Model) waitForWatchEvents() tea.Cmd {
+	return func() tea.Msg {
+		select {
+		case event := <-m.watchManager.GetEventChannel():
+			return watchEventMsg{event: event}
+		case err := <-m.watchManager.GetErrorChannel():
+			return watchErrorMsg{error: err}
+		}
+	}
+}
+
+// handleWatchEvent processes a watch event and updates the resource list
+func (m *Model) handleWatchEvent(event k8s.WatchEvent) {
+	m.loading = false
+	m.connected = true
+	m.err = nil
+	m.header.SetConnected(true)
+
+	// Convert k8s.ResourceType to components.ResourceType
+	// They have the same values but different types
+	componentResourceType := components.ResourceType(event.ResourceType)
+
+	switch event.EventType {
+	case "ADDED":
+		m.handleResourceAdded(componentResourceType, event.Object)
+	case "MODIFIED":
+		m.handleResourceModified(componentResourceType, event.Object)
+	case "DELETED":
+		m.handleResourceDeleted(componentResourceType, event.Object)
+	}
+}
+
+// handleResourceAdded adds or updates a resource in the list
+func (m *Model) handleResourceAdded(resourceType components.ResourceType, obj interface{}) {
+	switch resourceType {
+	case components.ResourceTypePod:
+		if pod, ok := obj.(*corev1.Pod); ok {
+			podInfo := models.NewPodInfo(pod)
+			m.resourceList.AddOrUpdatePod(podInfo)
+		}
+	case components.ResourceTypeService:
+		if svc, ok := obj.(*corev1.Service); ok {
+			svcInfo := models.NewServiceInfo(svc)
+			m.resourceList.AddOrUpdateService(svcInfo)
+		}
+	case components.ResourceTypeDeployment:
+		if dep, ok := obj.(*appsv1.Deployment); ok {
+			depInfo := models.NewDeploymentInfo(dep)
+			m.resourceList.AddOrUpdateDeployment(depInfo)
+		}
+	case components.ResourceTypeStatefulSet:
+		if sts, ok := obj.(*appsv1.StatefulSet); ok {
+			stsInfo := models.NewStatefulSetInfo(sts)
+			m.resourceList.AddOrUpdateStatefulSet(stsInfo)
+		}
+	case components.ResourceTypeEvent:
+		if evt, ok := obj.(*corev1.Event); ok {
+			evtInfo := models.NewEventInfo(evt)
+			m.resourceList.AddOrUpdateEvent(evtInfo)
+		}
+	}
+}
+
+// handleResourceModified updates a resource in the list
+func (m *Model) handleResourceModified(resourceType components.ResourceType, obj interface{}) {
+	// Modified is handled the same as added for our use case
+	m.handleResourceAdded(resourceType, obj)
+}
+
+// handleResourceDeleted removes a resource from the list
+func (m *Model) handleResourceDeleted(resourceType components.ResourceType, obj interface{}) {
+	switch resourceType {
+	case components.ResourceTypePod:
+		if pod, ok := obj.(*corev1.Pod); ok {
+			m.resourceList.RemovePod(pod.Namespace, pod.Name)
+		}
+	case components.ResourceTypeService:
+		if svc, ok := obj.(*corev1.Service); ok {
+			m.resourceList.RemoveService(svc.Namespace, svc.Name)
+		}
+	case components.ResourceTypeDeployment:
+		if dep, ok := obj.(*appsv1.Deployment); ok {
+			m.resourceList.RemoveDeployment(dep.Namespace, dep.Name)
+		}
+	case components.ResourceTypeStatefulSet:
+		if sts, ok := obj.(*appsv1.StatefulSet); ok {
+			m.resourceList.RemoveStatefulSet(sts.Namespace, sts.Name)
+		}
+	case components.ResourceTypeEvent:
+		if evt, ok := obj.(*corev1.Event); ok {
+			m.resourceList.RemoveEvent(evt.Namespace, evt.Name)
+		}
+	}
+}
+
+// checkConnectionState checks the connection state of all watchers
+func (m Model) checkConnectionState() tea.Cmd {
+	return func() tea.Msg {
+		state := m.watchManager.GetOverallConnectionState()
+		return connectionStateMsg{state: state}
+	}
+}
+
+// updateConnectionState updates the UI based on connection state
+func (m *Model) updateConnectionState(state k8s.ConnectionState) {
+	// Map k8s.ConnectionState to components.ConnectionState
+	var headerState components.ConnectionState
+	switch state {
+	case k8s.StateConnected:
+		m.connected = true
+		headerState = components.ConnectionStateConnected
+	case k8s.StateConnecting:
+		m.connected = true
+		headerState = components.ConnectionStateConnecting
+	case k8s.StateReconnecting:
+		m.connected = true
+		headerState = components.ConnectionStateReconnecting
+	case k8s.StateError:
+		m.connected = false
+		headerState = components.ConnectionStateError
+	case k8s.StateDisconnected:
+		m.connected = false
+		headerState = components.ConnectionStateDisconnected
+	}
+	m.header.SetConnectionState(headerState)
 }

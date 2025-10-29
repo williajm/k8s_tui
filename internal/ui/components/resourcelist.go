@@ -562,3 +562,143 @@ func (l *ResourceList) renderEventRow(idx int) string {
 		messageWidth, message,
 	)
 }
+
+// AddOrUpdatePod adds a new pod or updates an existing one
+func (l *ResourceList) AddOrUpdatePod(pod models.PodInfo) {
+	// Find if pod already exists
+	for i, existing := range l.pods {
+		if existing.Namespace == pod.Namespace && existing.Name == pod.Name {
+			// Update existing pod
+			l.pods[i] = pod
+			return
+		}
+	}
+	// Add new pod
+	l.pods = append(l.pods, pod)
+}
+
+// RemovePod removes a pod by namespace and name
+func (l *ResourceList) RemovePod(namespace, name string) {
+	for i, pod := range l.pods {
+		if pod.Namespace == namespace && pod.Name == name {
+			// Remove pod from slice
+			l.pods = append(l.pods[:i], l.pods[i+1:]...)
+			// Adjust selection if needed
+			if l.selectedIdx >= len(l.pods) && len(l.pods) > 0 {
+				l.selectedIdx = len(l.pods) - 1
+			}
+			if len(l.pods) == 0 {
+				l.selectedIdx = 0
+			}
+			return
+		}
+	}
+}
+
+// AddOrUpdateService adds a new service or updates an existing one
+func (l *ResourceList) AddOrUpdateService(service models.ServiceInfo) {
+	for i, existing := range l.services {
+		if existing.Namespace == service.Namespace && existing.Name == service.Name {
+			l.services[i] = service
+			return
+		}
+	}
+	l.services = append(l.services, service)
+}
+
+// RemoveService removes a service by namespace and name
+func (l *ResourceList) RemoveService(namespace, name string) {
+	for i, svc := range l.services {
+		if svc.Namespace == namespace && svc.Name == name {
+			l.services = append(l.services[:i], l.services[i+1:]...)
+			if l.selectedIdx >= len(l.services) && len(l.services) > 0 {
+				l.selectedIdx = len(l.services) - 1
+			}
+			if len(l.services) == 0 {
+				l.selectedIdx = 0
+			}
+			return
+		}
+	}
+}
+
+// AddOrUpdateDeployment adds a new deployment or updates an existing one
+func (l *ResourceList) AddOrUpdateDeployment(deployment models.DeploymentInfo) {
+	for i, existing := range l.deployments {
+		if existing.Namespace == deployment.Namespace && existing.Name == deployment.Name {
+			l.deployments[i] = deployment
+			return
+		}
+	}
+	l.deployments = append(l.deployments, deployment)
+}
+
+// RemoveDeployment removes a deployment by namespace and name
+func (l *ResourceList) RemoveDeployment(namespace, name string) {
+	for i, dep := range l.deployments {
+		if dep.Namespace == namespace && dep.Name == name {
+			l.deployments = append(l.deployments[:i], l.deployments[i+1:]...)
+			if l.selectedIdx >= len(l.deployments) && len(l.deployments) > 0 {
+				l.selectedIdx = len(l.deployments) - 1
+			}
+			if len(l.deployments) == 0 {
+				l.selectedIdx = 0
+			}
+			return
+		}
+	}
+}
+
+// AddOrUpdateStatefulSet adds a new statefulset or updates an existing one
+func (l *ResourceList) AddOrUpdateStatefulSet(statefulSet models.StatefulSetInfo) {
+	for i, existing := range l.statefulSets {
+		if existing.Namespace == statefulSet.Namespace && existing.Name == statefulSet.Name {
+			l.statefulSets[i] = statefulSet
+			return
+		}
+	}
+	l.statefulSets = append(l.statefulSets, statefulSet)
+}
+
+// RemoveStatefulSet removes a statefulset by namespace and name
+func (l *ResourceList) RemoveStatefulSet(namespace, name string) {
+	for i, sts := range l.statefulSets {
+		if sts.Namespace == namespace && sts.Name == name {
+			l.statefulSets = append(l.statefulSets[:i], l.statefulSets[i+1:]...)
+			if l.selectedIdx >= len(l.statefulSets) && len(l.statefulSets) > 0 {
+				l.selectedIdx = len(l.statefulSets) - 1
+			}
+			if len(l.statefulSets) == 0 {
+				l.selectedIdx = 0
+			}
+			return
+		}
+	}
+}
+
+// AddOrUpdateEvent adds a new event or updates an existing one
+func (l *ResourceList) AddOrUpdateEvent(event models.EventInfo) {
+	for i, existing := range l.events {
+		if existing.Namespace == event.Namespace && existing.Name == event.Name {
+			l.events[i] = event
+			return
+		}
+	}
+	l.events = append(l.events, event)
+}
+
+// RemoveEvent removes an event by namespace and name
+func (l *ResourceList) RemoveEvent(namespace, name string) {
+	for i, evt := range l.events {
+		if evt.Namespace == namespace && evt.Name == name {
+			l.events = append(l.events[:i], l.events[i+1:]...)
+			if l.selectedIdx >= len(l.events) && len(l.events) > 0 {
+				l.selectedIdx = len(l.events) - 1
+			}
+			if len(l.events) == 0 {
+				l.selectedIdx = 0
+			}
+			return
+		}
+	}
+}

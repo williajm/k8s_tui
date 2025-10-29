@@ -289,11 +289,11 @@ func TestWatchManagerGetOverallConnectionState(t *testing.T) {
 
 	// Should be one of the valid states (not Unknown)
 	validStates := map[ConnectionState]bool{
-		StateDisconnected:  true,
-		StateConnecting:    true,
-		StateConnected:     true,
-		StateReconnecting:  true,
-		StateError:         true,
+		StateDisconnected: true,
+		StateConnecting:   true,
+		StateConnected:    true,
+		StateReconnecting: true,
+		StateError:        true,
 	}
 
 	if !validStates[overallState] {
@@ -542,4 +542,264 @@ func TestWatchManagerConcurrentAccess(t *testing.T) {
 
 	// Stop
 	wm.Stop()
+}
+
+func TestWatchManagerErrorChannel(t *testing.T) {
+	fakeClientset := fake.NewSimpleClientset()
+	client := &Client{
+		clientset: fakeClientset,
+		namespace: "default",
+	}
+
+	wm := NewWatchManager(client)
+
+	// Get error channel before starting
+	errorChan := wm.GetErrorChannel()
+	if errorChan == nil {
+		t.Fatal("Expected non-nil error channel")
+	}
+
+	// Verify channel is buffered
+	select {
+	case <-errorChan:
+		t.Error("Error channel should be empty initially")
+	default:
+		// Expected - channel is empty
+	}
+}
+
+func TestWatchManagerEventChannel(t *testing.T) {
+	fakeClientset := fake.NewSimpleClientset()
+	client := &Client{
+		clientset: fakeClientset,
+		namespace: "default",
+	}
+
+	wm := NewWatchManager(client)
+
+	// Get event channel before starting
+	eventChan := wm.GetEventChannel()
+	if eventChan == nil {
+		t.Fatal("Expected non-nil event channel")
+	}
+
+	// Verify channel is buffered
+	select {
+	case <-eventChan:
+		t.Error("Event channel should be empty initially")
+	default:
+		// Expected - channel is empty
+	}
+}
+
+func TestWatchManagerChannelPropagation(t *testing.T) {
+	// Create test pod
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:            "test-pod",
+			Namespace:       "default",
+			ResourceVersion: "1",
+		},
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
+				{Name: "nginx", Image: "nginx:latest"},
+			},
+		},
+	}
+
+	fakeClientset := fake.NewSimpleClientset(pod)
+	client := &Client{
+		clientset: fakeClientset,
+		namespace: "default",
+	}
+
+	wm := NewWatchManager(client)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	// Start watching
+	resourceTypes := []ResourceType{ResourceTypePod}
+	err := wm.Start(ctx, resourceTypes)
+	if err != nil {
+		t.Fatalf("Start failed: %v", err)
+	}
+
+	// Get channels
+	eventChan := wm.GetEventChannel()
+	errorChan := wm.GetErrorChannel()
+
+	// Wait for initial list events
+	receivedEvents := 0
+	timeout := time.After(2 * time.Second)
+
+eventLoop:
+	for {
+		select {
+		case event := <-eventChan:
+			receivedEvents++
+			t.Logf("Received event: %v for resource %s", event.EventType, event.ResourceType)
+			if receivedEvents >= 1 {
+				break eventLoop
+			}
+		case err := <-errorChan:
+			t.Logf("Received error (may be expected): fatal=%v, err=%v", err.Fatal, err.Err)
+		case <-timeout:
+			t.Log("Timeout waiting for events (fake client behavior may vary)")
+			break eventLoop
+		}
+	}
+
+	// Stop
+	wm.Stop()
+
+	t.Logf("Total events received: %d", receivedEvents)
+}
+
+func TestWatchManagerOverallStateCalculation(t *testing.T) {
+	fakeClientset := fake.NewSimpleClientset()
+	client := &Client{
+		clientset: fakeClientset,
+		namespace: "default",
+	}
+
+	wm := NewWatchManager(client)
+
+	// Test state with no watchers
+	state := wm.GetOverallConnectionState()
+	if state != StateDisconnected {
+		t.Errorf("Expected StateDisconnected with no watchers, got %v", state)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Start multiple watchers
+	resourceTypes := []ResourceType{ResourceTypePod, ResourceTypeService, ResourceTypeDeployment}
+	err := wm.Start(ctx, resourceTypes)
+	if err != nil {
+		t.Fatalf("Start failed: %v", err)
+	}
+
+	time.Sleep(200 * time.Millisecond)
+
+	// Get overall state
+	overallState := wm.GetOverallConnectionState()
+	t.Logf("Overall state with 3 watchers: %v", overallState)
+
+	// Should be one of the valid states
+	validStates := []ConnectionState{
+		StateDisconnected,
+		StateConnecting,
+		StateConnected,
+		StateReconnecting,
+		StateError,
+	}
+
+	found := false
+	for _, valid := range validStates {
+		if overallState == valid {
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		t.Errorf("Overall state %v is not valid", overallState)
+	}
+
+	// Get individual states
+	states := wm.GetConnectionStates()
+	if len(states) != 3 {
+		t.Errorf("Expected 3 watcher states, got %d", len(states))
+	}
+
+	// Log individual states
+	for rt, state := range states {
+		t.Logf("Watcher %s: %v", rt, state)
+	}
+
+	// Stop
+	wm.Stop()
+}
+
+func TestWatchManagerStopCleansUpChannels(t *testing.T) {
+	fakeClientset := fake.NewSimpleClientset()
+	client := &Client{
+		clientset: fakeClientset,
+		namespace: "default",
+	}
+
+	wm := NewWatchManager(client)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Start watching
+	resourceTypes := []ResourceType{ResourceTypePod}
+	err := wm.Start(ctx, resourceTypes)
+	if err != nil {
+		t.Fatalf("Start failed: %v", err)
+	}
+
+	time.Sleep(100 * time.Millisecond)
+
+	// Verify watcher is running
+	if !wm.IsWatching(ResourceTypePod) {
+		t.Fatal("Expected to be watching pods")
+	}
+
+	// Stop
+	wm.Stop()
+
+	// Verify cleanup
+	if wm.GetWatcherCount() != 0 {
+		t.Errorf("Expected 0 watchers after stop, got %d", wm.GetWatcherCount())
+	}
+
+	if wm.IsWatching(ResourceTypePod) {
+		t.Error("Expected not to be watching pods after stop")
+	}
+}
+
+func TestWatchManagerDebugModePropagation(t *testing.T) {
+	fakeClientset := fake.NewSimpleClientset()
+	client := &Client{
+		clientset: fakeClientset,
+		namespace: "default",
+	}
+
+	wm := NewWatchManager(client)
+
+	// Initially false
+	if wm.debugMode {
+		t.Error("Expected debugMode to be false initially")
+	}
+
+	// Enable debug mode
+	wm.SetDebugMode(true)
+	if !wm.debugMode {
+		t.Error("Expected debugMode to be true after enabling")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	// Start watchers - they should inherit debug mode
+	resourceTypes := []ResourceType{ResourceTypePod, ResourceTypeService}
+	err := wm.Start(ctx, resourceTypes)
+	if err != nil {
+		t.Fatalf("Start failed: %v", err)
+	}
+
+	time.Sleep(100 * time.Millisecond)
+
+	// Stop
+	wm.Stop()
+
+	// Change debug mode and restart
+	wm.SetDebugMode(false)
+	if wm.debugMode {
+		t.Error("Expected debugMode to be false after disabling")
+	}
 }

@@ -8,7 +8,6 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes/fake"
 )
@@ -477,9 +476,4 @@ func TestWatchReceivesDeletedEvent(t *testing.T) {
 // int32ptr is a helper for tests
 func int32ptr(i int32) *int32 {
 	return &i
-}
-
-// runtimeObjectPtr is a helper for creating runtime.Object pointers
-func runtimeObjectPtr(obj runtime.Object) *runtime.Object {
-	return &obj
 }

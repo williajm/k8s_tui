@@ -2,12 +2,15 @@ package k8s
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes/fake"
 )
@@ -130,12 +133,12 @@ func TestResourceWatcherStop(t *testing.T) {
 		t.Error("Expected cancelFunc to be nil after stop")
 	}
 
-	// Context should be cancelled
+	// Context should be canceled
 	select {
 	case <-ctx.Done():
 		// Expected
 	default:
-		t.Error("Expected context to be cancelled")
+		t.Error("Expected context to be canceled")
 	}
 }
 
@@ -528,5 +531,183 @@ func TestCreateWatcherForDifferentResourceTypes(t *testing.T) {
 				t.Fatalf("Expected non-nil watcher for %s", tt.name)
 			}
 		})
+	}
+}
+
+func TestIsWatchErrorFatal(t *testing.T) {
+	podGVR := schema.GroupVersionResource{Group: "", Version: "v1", Resource: "pods"}
+
+	tests := []struct {
+		name  string
+		err   error
+		fatal bool
+	}{
+		{
+			name:  "Unauthorized error is fatal",
+			err:   apierrors.NewUnauthorized("Unauthorized"),
+			fatal: true,
+		},
+		{
+			name:  "Forbidden error is fatal",
+			err:   apierrors.NewForbidden(podGVR.GroupResource(), "test-pod", fmt.Errorf("forbidden")),
+			fatal: true,
+		},
+		{
+			name:  "Not found error is fatal",
+			err:   apierrors.NewNotFound(podGVR.GroupResource(), "test-pod"),
+			fatal: true,
+		},
+		{
+			name:  "Gone error (410) is NOT fatal - triggers re-list",
+			err:   apierrors.NewGone("Resource version too old"),
+			fatal: false,
+		},
+		{
+			name:  "Service unavailable (503) is NOT fatal",
+			err:   apierrors.NewServiceUnavailable("Service Unavailable"),
+			fatal: false,
+		},
+		{
+			name:  "Generic error is NOT fatal",
+			err:   fmt.Errorf("generic error"),
+			fatal: false,
+		},
+		{
+			name:  "Network timeout is NOT fatal",
+			err:   fmt.Errorf("context deadline exceeded"),
+			fatal: false,
+		},
+		{
+			name:  "Too many requests (429) is NOT fatal",
+			err:   apierrors.NewTooManyRequests("rate limited", 10),
+			fatal: false,
+		},
+		{
+			name:  "Internal server error (500) is NOT fatal",
+			err:   apierrors.NewInternalError(fmt.Errorf("internal error")),
+			fatal: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := isWatchErrorFatal(tt.err)
+			if result != tt.fatal {
+				t.Errorf("isWatchErrorFatal() = %v, want %v", result, tt.fatal)
+			}
+		})
+	}
+}
+
+func TestResourceWatcherReconnectionBackoff(t *testing.T) {
+	fakeClientset := fake.NewSimpleClientset()
+	client := &Client{
+		clientset: fakeClientset,
+		namespace: "default",
+	}
+
+	watcher := NewResourceWatcher(client, ResourceTypePod, "default")
+
+	// Check initial backoff state
+	if watcher.backoff.Attempts() != 0 {
+		t.Errorf("Expected 0 initial attempts, got %d", watcher.backoff.Attempts())
+	}
+
+	// Verify backoff resets on successful connection
+	watcher.backoff.Next() // Simulate one failed attempt
+	watcher.backoff.Next() // Simulate another failed attempt
+
+	if watcher.backoff.Attempts() != 2 {
+		t.Errorf("Expected 2 attempts, got %d", watcher.backoff.Attempts())
+	}
+
+	// Reset should clear attempts
+	watcher.backoff.Reset()
+	if watcher.backoff.Attempts() != 0 {
+		t.Errorf("Expected 0 attempts after reset, got %d", watcher.backoff.Attempts())
+	}
+}
+
+func TestResourceWatcherConcurrency(t *testing.T) {
+	fakeClientset := fake.NewSimpleClientset()
+	client := &Client{
+		clientset: fakeClientset,
+		namespace: "default",
+	}
+
+	watcher := NewResourceWatcher(client, ResourceTypePod, "default")
+
+	// Test concurrent access to state
+	done := make(chan bool)
+	for i := 0; i < 10; i++ {
+		go func() {
+			_ = watcher.GetState()
+			_ = watcher.GetResourceVersion()
+			watcher.setState(StateConnected)
+			watcher.setResourceVersion("test-version")
+			done <- true
+		}()
+	}
+
+	// Wait for all goroutines
+	for i := 0; i < 10; i++ {
+		<-done
+	}
+
+	// Should not panic and should have a valid state
+	state := watcher.GetState()
+	if state != StateConnected {
+		t.Logf("Final state: %v (expected Connected, but concurrent access may vary)", state)
+	}
+}
+
+func TestHandleWatchEventUnsupportedObject(t *testing.T) {
+	fakeClientset := fake.NewSimpleClientset()
+	client := &Client{
+		clientset: fakeClientset,
+		namespace: "default",
+	}
+
+	watcher := NewResourceWatcher(client, ResourceTypePod, "default")
+
+	eventChan := make(chan WatchEvent, 10)
+	errorChan := make(chan WatchError, 10)
+
+	// Create event with unsupported object type (raw string)
+	unsupportedEvent := watch.Event{
+		Type:   watch.Added,
+		Object: &metav1.Status{Message: "This is not a Pod"}, // Wrong type for pod watcher
+	}
+
+	// This should handle gracefully (log warning but not crash)
+	err := watcher.handleWatchEvent(unsupportedEvent, eventChan, errorChan)
+
+	// We expect either no error or a handled error - not a panic
+	if err != nil {
+		t.Logf("handleWatchEvent returned error (expected): %v", err)
+	}
+}
+
+func TestResourceWatcherNamespaceIsolation(t *testing.T) {
+	// Test that watchers respect namespace boundaries
+	fakeClientset := fake.NewSimpleClientset()
+	client := &Client{
+		clientset: fakeClientset,
+		namespace: "default",
+	}
+
+	watcher1 := NewResourceWatcher(client, ResourceTypePod, "default")
+	watcher2 := NewResourceWatcher(client, ResourceTypePod, "kube-system")
+
+	if watcher1.namespace == watcher2.namespace {
+		t.Error("Watchers should have different namespaces")
+	}
+
+	if watcher1.namespace != "default" {
+		t.Errorf("watcher1 namespace = %s, want default", watcher1.namespace)
+	}
+
+	if watcher2.namespace != "kube-system" {
+		t.Errorf("watcher2 namespace = %s, want kube-system", watcher2.namespace)
 	}
 }

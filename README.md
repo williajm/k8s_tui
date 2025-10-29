@@ -16,26 +16,28 @@ A fast, keyboard-driven terminal user interface for Kubernetes cluster managemen
 
 ## Features
 
-### ✅ Available Now (v0.2.0)
+### ✅ Available Now (v0.3.0 + Phase 4 on feature branch)
 
-- **Multi-Resource Support**: View Pods, Services, Deployments, and StatefulSets
-- **Tab Navigation**: Switch between resource types with Tab/Shift+Tab or number keys (1-4)
+- **Multi-Resource Support**: View Pods, Services, Deployments, StatefulSets, and Events
+- **Tab Navigation**: Switch between resource types with Tab/Shift+Tab or number keys (1-5)
 - **Detail Views**: Press Enter to view comprehensive resource details
+- **Pod Log Streaming**: Real-time log viewing with follow mode, timestamps, and container selection ('l' key)
+- **Events Display**: View Kubernetes events with type filtering and age-based sorting (5th tab)
+- **Describe Functionality**: Inspect resources in Describe, YAML, or JSON format ('d' key)
 - **Namespace Switching**: Quick namespace selector with 'n' key
 - **Search/Filter**: Real-time filtering with '/' key across all resource types
-- **Auto-Refresh**: Resources update automatically every 5 seconds
+- **Auto-Refresh**: Resources update automatically every 5 seconds (polling) or in real-time (watch mode)
+- **Real-Time Watch** (Phase 4): Event-driven updates via Kubernetes Watch API with automatic reconnection
 - **Status Indicators**: Visual symbols (✓, ✗, ○, ⚠, ⊗) for resource health
+- **Connection Status**: Live connection state indicator (Connected, Reconnecting, Disconnected, Error)
 - **Keyboard-Driven**: Complete navigation without mouse
 - **Fast & Lightweight**: Single binary, minimal resource usage
 
 ### 🚧 Coming Soon
 
-- **Log Streaming**: View pod logs directly in the TUI (Phase 3)
-- **Events Display**: Show Kubernetes events for resources (Phase 3)
-- **Describe Functionality**: Detailed resource inspection (Phase 3)
-- **Watch API**: Replace polling with efficient event-driven updates (Phase 4)
 - **Configuration**: Persistent settings and custom themes (Phase 5)
 - **More Resources**: ConfigMaps, Secrets, Jobs, DaemonSets, etc. (Phase 6)
+- **Virtual Scrolling**: Performance optimization for 1000+ resources
 - **Write Operations**: Scale, delete, restart resources (Phase 7)
 
 ## Installation
@@ -100,11 +102,12 @@ go build -o k8s-tui cmd/k8s-tui/main.go
 
 #### Global Navigation
 - `Tab` / `Shift+Tab` - Switch between resource tabs
-- `1-4` - Quick switch to tab (1=Pods, 2=Services, 3=Deployments, 4=StatefulSets)
+- `1-5` - Quick switch to tab (1=Pods, 2=Services, 3=Deployments, 4=StatefulSets, 5=Events)
 - `/` - Search/filter in current list
 - `Esc` - Cancel/go back
 - `?` - Show help screen
 - `q` - Quit application
+- `r` / `F5` - Manual refresh
 
 #### List Navigation
 - `↑` / `↓` - Move up/down
@@ -114,13 +117,20 @@ go build -o k8s-tui cmd/k8s-tui/main.go
 
 #### Resource Actions
 - `n` - Change namespace (opens selector dialog)
-- `r` - Manual refresh (auto-refresh runs every 5s)
+- `l` - View pod logs (from pods tab)
+- `d` - Describe resource in multiple formats (from detail view)
 
-#### Coming Soon (Phase 3+)
-- `l` - View pod logs
-- `e` - View events for resource
-- `d` - Describe resource (detailed inspection)
-- `c` - Change context
+#### Log Viewer
+- `f` - Toggle follow mode (live streaming)
+- `t` - Toggle timestamps
+- `p` - View previous container logs
+- `↑` / `↓` - Scroll through logs
+
+#### Describe Viewer
+- `d` - Describe format (structured view)
+- `y` - YAML format
+- `j` - JSON format
+- `↑` / `↓` - Scroll through content
 
 ## Testing
 
@@ -157,16 +167,19 @@ go tool cover -html=coverage.out
 ```
 
 **Current Test Coverage:**
-- ✅ **Models**: PodInfo, ServiceInfo, DeploymentInfo, StatefulSetInfo (all status symbols and health checks)
-- ✅ **UI Components**: ResourceList, Tabs, Selector (navigation, filtering, state management)
+- ✅ **Models**: PodInfo, ServiceInfo, DeploymentInfo, StatefulSetInfo, EventInfo, LogEntry, DescribeData (all status symbols and health checks)
+- ✅ **UI Components**: ResourceList, Tabs, Selector, LogViewer, DescribeViewer, ContainerSelector (navigation, filtering, state management)
+- ✅ **Watch Infrastructure**: ExponentialBackoff, ResourceWatcher, WatchManager (connection management, error handling)
 - ✅ **Styles**: Theme colors, status styles, rendering helpers
+- ✅ **Total**: 287+ tests passing with race detector
 
 ## Configuration
 
 **Note**: Configuration support is planned for Phase 5. Currently, k8s-tui uses sensible defaults:
-- Auto-refresh: 5 seconds
+- Update mode: Real-time watch with automatic fallback to 5-second polling
 - Theme: Dark mode
 - Default namespace: From kubeconfig context
+- Connection management: Automatic reconnection with exponential backoff
 
 Future configuration file location: `~/.k8s-tui/config.yaml` (Phase 5)
 
@@ -274,7 +287,7 @@ See [CLAUDE.md](CLAUDE.md#development-roadmap) for the complete development road
 - ✅ CI/CD pipeline with cross-platform testing
 - ✅ Unit testing infrastructure
 
-### Phase 2 - Core Features (v0.2.0) ✅ Complete - Ready for PR
+### Phase 2 - Core Features (v0.2.0) ✅ Complete - Merged to Main
 - ✅ Multi-resource support (Pods, Services, Deployments, StatefulSets)
 - ✅ Tab navigation between resource types
 - ✅ Detail views for all resources
@@ -283,15 +296,22 @@ See [CLAUDE.md](CLAUDE.md#development-roadmap) for the complete development road
 - ✅ Real-time updates (5-second auto-refresh)
 - ✅ Comprehensive unit tests for all Phase 2 components
 
-### Phase 3 - Observability & Logs (v0.3.0) 📋 Planned
-- [ ] Pod log streaming view
-- [ ] Kubernetes events display
-- [ ] Describe functionality (full resource inspection)
+### Phase 3 - Observability & Logs (v0.3.0) ✅ Complete - Merged to Main
+- ✅ Pod log streaming view with follow mode and timestamps
+- ✅ Container selector for multi-container pods
+- ✅ Kubernetes events display (5th tab)
+- ✅ Describe functionality with YAML/JSON/Describe formats
+- ✅ Previous container logs support
+- ✅ Log level detection and color coding
 
-### Phase 4 - Real-time Watch & Performance (v0.4.0) 📋 Planned
-- [ ] Kubernetes Watch API integration
-- [ ] Replace polling with event-driven updates
-- [ ] Performance optimizations
+### Phase 4 - Real-time Watch & Performance (v0.4.0) ✅ Complete - Ready for PR
+- ✅ Kubernetes Watch API integration
+- ✅ Event-driven real-time updates (replaces polling)
+- ✅ Automatic reconnection with exponential backoff
+- ✅ Enhanced connection state indicator (5 states)
+- ✅ Diff-based UI updates for performance
+- ✅ Resource version tracking and 410 Gone handling
+- ✅ 287+ tests passing with comprehensive coverage
 
 ### Phase 5 - Configuration & Customization (v0.5.0) 📋 Planned
 - [ ] Configuration file support
