@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -12,9 +11,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/williajm/k8s-tui/internal/app"
 	"github.com/williajm/k8s-tui/internal/config"
-	"github.com/williajm/k8s-tui/internal/debug"
 	"github.com/williajm/k8s-tui/internal/k8s"
-	"k8s.io/klog/v2"
 )
 
 var (
@@ -22,7 +19,6 @@ var (
 	contextName    string
 	namespace      string
 	configPath     string
-	debugMode      bool
 )
 
 func main() {
@@ -39,7 +35,6 @@ Kubernetes clusters. It provides real-time monitoring and navigation of your clu
 	rootCmd.Flags().StringVar(&kubeconfigPath, "kubeconfig", "", "Path to kubeconfig file")
 	rootCmd.Flags().StringVar(&contextName, "context", "", "Kubernetes context to use")
 	rootCmd.Flags().StringVarP(&namespace, "namespace", "n", "default", "Kubernetes namespace to use")
-	rootCmd.Flags().BoolVar(&debugMode, "debug", false, "Enable debug logging to ~/.k8s-tui/debug.log")
 
 	// Add init-config subcommand
 	initConfigCmd := &cobra.Command{
@@ -57,24 +52,6 @@ Kubernetes clusters. It provides real-time monitoring and navigation of your clu
 }
 
 func run(_ *cobra.Command, _ []string) error {
-	// Initialize debug logging
-	if err := debug.InitLogger(debugMode); err != nil {
-		return fmt.Errorf("failed to initialize debug logger: %w", err)
-	}
-	defer debug.CloseLogger()
-
-	// Suppress klog output to prevent Kubernetes client-go from corrupting TUI
-	// This is CRITICAL - without this, k8s client-go writes to stderr and corrupts the terminal
-	if debugMode {
-		debug.GetLogger().Log("Debug mode enabled")
-		debug.GetLogger().Log("Suppressing klog output to prevent TUI corruption")
-	}
-	klog.SetOutput(os.NewFile(0, os.DevNull))
-	klogFlags := flag.NewFlagSet("klog", flag.ContinueOnError)
-	klog.InitFlags(klogFlags)
-	_ = klogFlags.Set("logtostderr", "false")
-	_ = klogFlags.Set("v", "-1")
-
 	// Load configuration
 	cfg, err := config.Load(configPath)
 	if err != nil {
