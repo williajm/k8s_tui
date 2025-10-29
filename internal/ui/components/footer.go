@@ -29,15 +29,18 @@ func (f *Footer) View() string {
 	shortcuts := []string{
 		styles.RenderKeyHelp("[↑↓]", "Navigate"),
 		styles.RenderKeyHelp("[Enter]", "Select"),
+		styles.RenderKeyHelp("[Esc]", "Back"),
 		styles.RenderKeyHelp("[Tab]", "Switch"),
+		styles.RenderKeyHelp("[n]", "Namespace"),
+		styles.RenderKeyHelp("[l]", "Logs"),
 		styles.RenderKeyHelp("[/]", "Search"),
 		styles.RenderKeyHelp("[r]", "Refresh"),
 		styles.RenderKeyHelp("[?]", "Help"),
 		styles.RenderKeyHelp("[q]", "Quit"),
 	}
 
-	line1 := strings.Join(shortcuts[:4], "  ")
-	line2 := strings.Join(shortcuts[4:], "  ")
+	line1 := strings.Join(shortcuts[:5], "  ")
+	line2 := strings.Join(shortcuts[5:], "  ")
 
 	footer := lipgloss.JoinVertical(
 		lipgloss.Left,
@@ -86,10 +89,9 @@ func (f *Footer) ViewDetailed() string {
 		{
 			title: "Resource Actions",
 			shortcuts: []string{
-				styles.RenderKeyHelp("L", "View logs (pods)"),
-				styles.RenderKeyHelp("E", "View events"),
-				styles.RenderKeyHelp("Y", "View YAML"),
-				styles.RenderKeyHelp("D", "Describe resource"),
+				styles.RenderKeyHelp("l", "View logs (pods)"),
+				styles.RenderKeyHelp("d", "Describe resource"),
+				styles.RenderKeyHelp("5", "Jump to Events tab"),
 			},
 		},
 		{

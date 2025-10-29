@@ -26,6 +26,7 @@ func NewTabs() *Tabs {
 			{Title: "Services", ID: 1},
 			{Title: "Deployments", ID: 2},
 			{Title: "StatefulSets", ID: 3},
+			{Title: "Events", ID: 4},
 		},
 		activeTab: 0,
 		width:     80,

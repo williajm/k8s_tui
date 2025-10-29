@@ -26,16 +26,22 @@ type KeyMap struct {
 	ShiftTab key.Binding
 
 	// Resource actions
-	Namespace key.Binding
-	Context   key.Binding
-	Search    key.Binding
-	Logs      key.Binding
-	Events    key.Binding
-	YAML      key.Binding
-	Describe  key.Binding
+	Namespace  key.Binding
+	Context    key.Binding
+	Search     key.Binding
+	Logs       key.Binding
+	Events     key.Binding
+	YAML       key.Binding
+	JSON       key.Binding
+	Describe   key.Binding
+	Follow     key.Binding
+	Previous   key.Binding
+	Timestamps key.Binding
 }
 
 // DefaultKeyMap returns the default key bindings
+//
+//nolint:funlen // Key bindings initialization is inherently long
 func DefaultKeyMap() KeyMap {
 	return KeyMap{
 		// Global keys
@@ -80,7 +86,7 @@ func DefaultKeyMap() KeyMap {
 
 		// Selection keys
 		Enter: key.NewBinding(
-			key.WithKeys("enter", "right", "l"),
+			key.WithKeys("enter", "right"),
 			key.WithHelp("enter", "select"),
 		),
 		Back: key.NewBinding(
@@ -112,20 +118,36 @@ func DefaultKeyMap() KeyMap {
 			key.WithHelp("/", "search"),
 		),
 		Logs: key.NewBinding(
-			key.WithKeys("L"),
-			key.WithHelp("L", "logs"),
+			key.WithKeys("l"),
+			key.WithHelp("l", "logs"),
 		),
 		Events: key.NewBinding(
-			key.WithKeys("E"),
-			key.WithHelp("E", "events"),
+			key.WithKeys("5"),
+			key.WithHelp("5", "events"),
 		),
 		YAML: key.NewBinding(
-			key.WithKeys("Y"),
-			key.WithHelp("Y", "yaml"),
+			key.WithKeys("y"),
+			key.WithHelp("y", "yaml"),
+		),
+		JSON: key.NewBinding(
+			key.WithKeys("j"),
+			key.WithHelp("j", "json"),
 		),
 		Describe: key.NewBinding(
-			key.WithKeys("D"),
-			key.WithHelp("D", "describe"),
+			key.WithKeys("d"),
+			key.WithHelp("d", "describe"),
+		),
+		Follow: key.NewBinding(
+			key.WithKeys("f"),
+			key.WithHelp("f", "follow"),
+		),
+		Previous: key.NewBinding(
+			key.WithKeys("p"),
+			key.WithHelp("p", "previous"),
+		),
+		Timestamps: key.NewBinding(
+			key.WithKeys("t"),
+			key.WithHelp("t", "timestamps"),
 		),
 	}
 }
@@ -153,7 +175,9 @@ func (k KeyMap) FullHelp() [][]key.Binding {
 		// Actions
 		{k.Namespace, k.Context, k.Search, k.Refresh},
 		// Resource actions
-		{k.Logs, k.Events, k.YAML, k.Describe},
+		{k.Logs, k.Events, k.Describe},
+		// View actions
+		{k.YAML, k.JSON, k.Follow, k.Previous, k.Timestamps},
 		// Global
 		{k.Help, k.Quit},
 	}

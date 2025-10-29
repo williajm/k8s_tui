@@ -19,11 +19,11 @@ func TestNewTabs(t *testing.T) {
 		t.Errorf("NewTabs().width = %d, want 80", tabs.width)
 	}
 
-	if len(tabs.tabs) != 4 {
-		t.Errorf("NewTabs() has %d tabs, want 4", len(tabs.tabs))
+	if len(tabs.tabs) != 5 {
+		t.Errorf("NewTabs() has %d tabs, want 5", len(tabs.tabs))
 	}
 
-	expectedTitles := []string{"Pods", "Services", "Deployments", "StatefulSets"}
+	expectedTitles := []string{"Pods", "Services", "Deployments", "StatefulSets", "Events"}
 	for i, expectedTitle := range expectedTitles {
 		if tabs.tabs[i].Title != expectedTitle {
 			t.Errorf("NewTabs().tabs[%d].Title = %s, want %s", i, tabs.tabs[i].Title, expectedTitle)
@@ -129,20 +129,32 @@ func TestTabs_NextTab(t *testing.T) {
 		t.Errorf("After NextTab() from 2, activeTab = %d, want 3", tabs.activeTab)
 	}
 
+	// Next should be 4
+	tabs.NextTab()
+	if tabs.activeTab != 4 {
+		t.Errorf("After NextTab() from 3, activeTab = %d, want 4", tabs.activeTab)
+	}
+
 	// Next should wrap around to 0
 	tabs.NextTab()
 	if tabs.activeTab != 0 {
-		t.Errorf("After NextTab() from 3, activeTab = %d, want 0 (wrap around)", tabs.activeTab)
+		t.Errorf("After NextTab() from 4, activeTab = %d, want 0 (wrap around)", tabs.activeTab)
 	}
 }
 
 func TestTabs_PrevTab(t *testing.T) {
 	tabs := NewTabs()
 
-	// Start at 0, prev should wrap to 3
+	// Start at 0, prev should wrap to 4
+	tabs.PrevTab()
+	if tabs.activeTab != 4 {
+		t.Errorf("After PrevTab() from 0, activeTab = %d, want 4 (wrap around)", tabs.activeTab)
+	}
+
+	// Prev should be 3
 	tabs.PrevTab()
 	if tabs.activeTab != 3 {
-		t.Errorf("After PrevTab() from 0, activeTab = %d, want 3 (wrap around)", tabs.activeTab)
+		t.Errorf("After PrevTab() from 4, activeTab = %d, want 3", tabs.activeTab)
 	}
 
 	// Prev should be 2
@@ -174,7 +186,7 @@ func TestTabs_View(t *testing.T) {
 	}
 
 	// Test with different active tabs
-	for i := 0; i < 4; i++ {
+	for i := 0; i < 5; i++ {
 		tabs.SetActiveTab(i)
 		view = tabs.View()
 		if view == "" {
@@ -194,7 +206,7 @@ func TestTabs_NavigationCycle(t *testing.T) {
 	tabs := NewTabs()
 
 	// Test full forward cycle
-	for i := 0; i < 4; i++ {
+	for i := 0; i < 5; i++ {
 		if tabs.GetActiveTab() != i {
 			t.Errorf("Forward cycle iteration %d: activeTab = %d, want %d", i, tabs.GetActiveTab(), i)
 		}
@@ -207,8 +219,8 @@ func TestTabs_NavigationCycle(t *testing.T) {
 	}
 
 	// Test full backward cycle
-	for i := 0; i < 4; i++ {
-		expectedTab := (4 - i) % 4
+	for i := 0; i < 5; i++ {
+		expectedTab := (5 - i) % 5
 		if tabs.GetActiveTab() != expectedTab {
 			t.Errorf("Backward cycle iteration %d: activeTab = %d, want %d", i, tabs.GetActiveTab(), expectedTab)
 		}

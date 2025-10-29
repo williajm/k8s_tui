@@ -130,7 +130,7 @@ func TestKeyMap_Selection(t *testing.T) {
 		{
 			name:         "Enter",
 			binding:      km.Enter,
-			expectedKeys: []string{"enter", "right", "l"},
+			expectedKeys: []string{"enter", "right"},
 		},
 		{
 			name:         "Back",
@@ -192,22 +192,22 @@ func TestKeyMap_ResourceActions(t *testing.T) {
 		{
 			name:         "Logs",
 			binding:      km.Logs,
-			expectedKeys: []string{"L"},
+			expectedKeys: []string{"l"},
 		},
 		{
 			name:         "Events",
 			binding:      km.Events,
-			expectedKeys: []string{"E"},
+			expectedKeys: []string{"5"},
 		},
 		{
 			name:         "YAML",
 			binding:      km.YAML,
-			expectedKeys: []string{"Y"},
+			expectedKeys: []string{"y"},
 		},
 		{
 			name:         "Describe",
 			binding:      km.Describe,
-			expectedKeys: []string{"D"},
+			expectedKeys: []string{"d"},
 		},
 	}
 
@@ -265,7 +265,7 @@ func TestKeyMap_FullHelp(t *testing.T) {
 	km := DefaultKeyMap()
 	fullHelp := km.FullHelp()
 
-	expectedCategories := 5
+	expectedCategories := 6
 	if len(fullHelp) != expectedCategories {
 		t.Errorf("expected %d help categories, got %d", expectedCategories, len(fullHelp))
 	}
@@ -300,15 +300,24 @@ func TestKeyMap_FullHelp(t *testing.T) {
 	// Test resource actions category (fourth category)
 	if len(fullHelp) > 3 {
 		resourceBindings := fullHelp[3]
-		expectedResCount := 4
+		expectedResCount := 3
 		if len(resourceBindings) != expectedResCount {
 			t.Errorf("expected %d resource action bindings, got %d", expectedResCount, len(resourceBindings))
 		}
 	}
 
-	// Test global category (fifth category)
+	// Test view actions category (fifth category)
 	if len(fullHelp) > 4 {
-		globalBindings := fullHelp[4]
+		viewBindings := fullHelp[4]
+		expectedViewCount := 5
+		if len(viewBindings) != expectedViewCount {
+			t.Errorf("expected %d view action bindings, got %d", expectedViewCount, len(viewBindings))
+		}
+	}
+
+	// Test global category (sixth category)
+	if len(fullHelp) > 5 {
+		globalBindings := fullHelp[5]
 		expectedGlobalCount := 2
 		if len(globalBindings) != expectedGlobalCount {
 			t.Errorf("expected %d global bindings, got %d", expectedGlobalCount, len(globalBindings))

@@ -64,3 +64,7 @@ tmp/
 
 # Claude Code settings (local only)
 .claude/
+
+# Development plans (not for version control)
+development-plan-*.md
+plans/*.md
