@@ -35,8 +35,6 @@ var (
 	// Header styles
 	HeaderStyle = lipgloss.NewStyle().
 			Foreground(ColorText).
-			Background(ColorPrimary).
-			Bold(true).
 			Padding(0, 1)
 
 	TitleStyle = lipgloss.NewStyle().
@@ -54,7 +52,6 @@ var (
 			Padding(0, 1)
 
 	SelectedListItemStyle = lipgloss.NewStyle().
-				Background(ColorSelected).
 				Foreground(ColorHighlight).
 				Bold(true).
 				Padding(0, 1)
@@ -112,7 +109,6 @@ var (
 			Foreground(ColorText)
 
 	TableSelectedRowStyle = lipgloss.NewStyle().
-				Background(ColorSelected).
 				Foreground(ColorHighlight).
 				Bold(true)
 
@@ -133,14 +129,12 @@ var (
 
 	// Tab styles
 	ActiveTabStyle = lipgloss.NewStyle().
-			Foreground(ColorText).
-			Background(ColorPrimary).
+			Foreground(ColorHighlight).
 			Bold(true).
 			Padding(0, 2)
 
 	InactiveTabStyle = lipgloss.NewStyle().
 				Foreground(ColorTextDim).
-				Background(ColorBackground).
 				Padding(0, 2)
 
 	TabBorderStyle = lipgloss.NewStyle().

@@ -12,6 +12,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 
 	"github.com/williajm/k8s-tui/internal/config"
+	"github.com/williajm/k8s-tui/internal/debug"
 	"github.com/williajm/k8s-tui/internal/k8s"
 	"github.com/williajm/k8s-tui/internal/models"
 	"github.com/williajm/k8s-tui/internal/ui/components"
@@ -59,6 +60,7 @@ type Model struct {
 	logStreamActive   bool
 	previousViewMode  ViewMode
 	useWatchAPI       bool
+	logger            debug.Logger
 }
 
 // Message types
@@ -172,14 +174,18 @@ func NewModelWithConfig(client *k8s.Client, cfg *config.Config) Model {
 		logStreamActive:   false,
 		previousViewMode:  ViewModeList,
 		useWatchAPI:       useWatchAPI,
+		logger:            debug.GetLogger(),
 	}
 }
 
 // Init initializes the application
 func (m Model) Init() tea.Cmd {
+	m.logger.Log("Init() called - forcing initial screen clear for proper rendering")
+
 	if m.useWatchAPI {
 		// Start watch-based updates
 		return tea.Batch(
+			tea.ClearScreen,  // Force screen clear on startup
 			m.startWatchMode(),
 			m.waitForWatchEvents(),
 		)
@@ -187,6 +193,7 @@ func (m Model) Init() tea.Cmd {
 
 	// Fallback to polling mode
 	return tea.Batch(
+		tea.ClearScreen,  // Force screen clear on startup
 		m.loadResources(),
 		m.tickCmd(),
 	)
@@ -196,13 +203,47 @@ func (m Model) Init() tea.Cmd {
 //
 //nolint:gocyclo,funlen // Complex state machine, acceptable for main update function
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// Log every message type
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		m.logger.LogKeyPress(msg.String(), string(msg.Runes))
+	case tea.WindowSizeMsg:
+		m.logger.Log("Update: WindowSizeMsg %dx%d", msg.Width, msg.Height)
+	case resourcesLoadedMsg:
+		m.logger.Log("Update: resourcesLoadedMsg type=%v, err=%v", msg.resourceType, msg.err != nil)
+	case namespacesLoadedMsg:
+		m.logger.Log("Update: namespacesLoadedMsg count=%d, err=%v", len(msg.namespaces), msg.err != nil)
+	case watchEventMsg:
+		m.logger.Log("Update: watchEventMsg type=%s, resource=%s", msg.event.EventType, msg.event.ResourceType)
+	case watchErrorMsg:
+		m.logger.Log("Update: watchErrorMsg err=%v, fatal=%v", msg.error.Err, msg.error.Fatal)
+	case connectionStateMsg:
+		m.logger.Log("Update: connectionStateMsg state=%v", msg.state)
+	case tickMsg:
+		m.logger.Log("Update: tickMsg (polling)")
+	case logStreamStartedMsg:
+		m.logger.Log("Update: logStreamStartedMsg")
+	case logEntryMsg:
+		m.logger.Log("Update: logEntryMsg")
+	case logStreamErrorMsg:
+		m.logger.Log("Update: logStreamErrorMsg err=%v", msg.err)
+	case logStreamStoppedMsg:
+		m.logger.Log("Update: logStreamStoppedMsg")
+	case describeLoadedMsg:
+		m.logger.Log("Update: describeLoadedMsg hasData=%v", msg.data != nil)
+	default:
+		m.logger.Log("Update: unknown message type %T", msg)
+	}
+
 	// Handle namespace selector first if visible
 	if m.namespaceSelector.IsVisible() {
+		m.logger.Log("Update: routing to handleNamespaceSelector (selector visible)")
 		return m.handleNamespaceSelector(msg)
 	}
 
 	// Handle search mode
 	if m.searchMode {
+		m.logger.Log("Update: routing to handleSearchMode")
 		return m.handleSearchMode(msg)
 	}
 
@@ -211,27 +252,41 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleKeyPress(msg)
 
 	case tea.WindowSizeMsg:
+		oldWidth, oldHeight := m.width, m.height
 		m.width = msg.Width
 		m.height = msg.Height
+		m.logger.LogResize("window", oldWidth, oldHeight, m.width, m.height)
 
 		// Update component sizes
 		m.header.SetWidth(m.width)
+		m.logger.LogResize("header", 0, 0, m.width, 0)
 		m.footer.SetWidth(m.width)
+		m.logger.LogResize("footer", 0, 0, m.width, 0)
 		m.tabs.SetWidth(m.width)
+		m.logger.LogResize("tabs", 0, 0, m.width, 0)
 
 		// Resource list and detail view get remaining height
-		remainingHeight := m.height - 6 // Header, tabs, footer, padding
+		// Header=1, Tabs=2 (content+border), Footer=2, Newlines=3 = 8 lines total
+		remainingHeight := m.height - 8
+		if remainingHeight < 5 {
+			remainingHeight = 5 // Minimum viable height
+		}
 		m.resourceList.SetSize(m.width, remainingHeight)
+		m.logger.LogResize("resourceList", 0, 0, m.width, remainingHeight)
 		m.detailView.SetSize(m.width, remainingHeight)
+		m.logger.LogResize("detailView", 0, 0, m.width, remainingHeight)
+		m.logger.Log("Height calculation: terminal=%d, remainingHeight=%d", m.height, remainingHeight)
 
 		// Selector size
 		selectorWidth := minInt(m.width-10, 50)
 		selectorHeight := minInt(m.height-6, 20)
 		m.namespaceSelector.SetSize(selectorWidth, selectorHeight)
+		m.logger.LogResize("namespaceSelector", 0, 0, selectorWidth, selectorHeight)
 
 	case resourcesLoadedMsg:
 		m.loading = false
 		if msg.err != nil {
+			m.logger.Log("Update: resourcesLoadedMsg ERROR: %v", msg.err)
 			m.err = msg.err
 			m.connected = false
 		} else {
@@ -241,18 +296,24 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Update the appropriate resource list
 			switch msg.resourceType {
 			case components.ResourceTypePod:
+				m.logger.Log("Update: resourcesLoadedMsg loaded %d pods", len(msg.pods))
 				m.resourceList.SetPods(msg.pods)
 			case components.ResourceTypeService:
+				m.logger.Log("Update: resourcesLoadedMsg loaded %d services", len(msg.services))
 				m.resourceList.SetServices(msg.services)
 			case components.ResourceTypeDeployment:
+				m.logger.Log("Update: resourcesLoadedMsg loaded %d deployments", len(msg.deployments))
 				m.resourceList.SetDeployments(msg.deployments)
 			case components.ResourceTypeStatefulSet:
+				m.logger.Log("Update: resourcesLoadedMsg loaded %d statefulsets", len(msg.statefulSets))
 				m.resourceList.SetStatefulSets(msg.statefulSets)
 			case components.ResourceTypeEvent:
+				m.logger.Log("Update: resourcesLoadedMsg loaded %d events", len(msg.events))
 				m.resourceList.SetEvents(msg.events)
 			}
 		}
 		m.header.SetConnected(m.connected)
+		m.logger.Log("Update: resourcesLoadedMsg set connected=%v", m.connected)
 
 	case logStreamStartedMsg:
 		m.logStreamActive = true
@@ -391,7 +452,9 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case key.Matches(msg, m.keyMap.Namespace):
 		// Show namespace selector
+		m.logger.Log("handleKeyPress: 'n' pressed, showing namespace selector")
 		m.namespaceSelector.Show()
+		m.logger.Log("handleKeyPress: namespace selector shown, loading namespaces")
 		return m, m.loadNamespaces()
 
 	case key.Matches(msg, m.keyMap.Search):
@@ -515,18 +578,22 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // handleNamespaceSelector handles input when namespace selector is visible
 func (m Model) handleNamespaceSelector(msg tea.Msg) (tea.Model, tea.Cmd) {
+	m.logger.Log("handleNamespaceSelector: msg type %T", msg)
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch {
 		case key.Matches(msg, m.keyMap.Up):
+			m.logger.Log("handleNamespaceSelector: MoveUp")
 			m.namespaceSelector.MoveUp()
 
 		case key.Matches(msg, m.keyMap.Down):
+			m.logger.Log("handleNamespaceSelector: MoveDown")
 			m.namespaceSelector.MoveDown()
 
 		case key.Matches(msg, m.keyMap.Enter):
 			// Select namespace and reload resources
 			selectedNS := m.namespaceSelector.GetSelected()
+			m.logger.Log("handleNamespaceSelector: Enter pressed, selected=%s", selectedNS)
 			if selectedNS != "" {
 				m.client.SetNamespace(selectedNS)
 				m.header = components.NewHeader(
@@ -535,24 +602,31 @@ func (m Model) handleNamespaceSelector(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.connected,
 				)
 				m.namespaceSelector.Hide()
+				m.logger.Log("handleNamespaceSelector: namespace selector hidden after selection")
+				m.logger.Log("handleNamespaceSelector: sending ClearScreen command to clear artifacts")
 				m.loading = true
 
 				// If using watch mode, restart watchers with new namespace
 				if m.useWatchAPI {
+					m.logger.Log("handleNamespaceSelector: restarting watch mode for namespace %s", selectedNS)
 					// Restart watch manager with new namespace
 					if err := m.watchManager.UpdateNamespace(selectedNS); err != nil {
 						m.err = fmt.Errorf("failed to switch namespace: %w", err)
 					}
-					return m, nil
+					return m, tea.ClearScreen
 				}
 
 				// Otherwise use polling mode to reload resources
-				return m, m.loadResources()
+				m.logger.Log("handleNamespaceSelector: loading resources for namespace %s", selectedNS)
+				return m, tea.Batch(tea.ClearScreen, m.loadResources())
 			}
 
 		case key.Matches(msg, m.keyMap.Back), key.Matches(msg, m.keyMap.Quit):
 			// Cancel namespace selection
+			m.logger.Log("handleNamespaceSelector: Back/Quit pressed, hiding selector")
 			m.namespaceSelector.Hide()
+			m.logger.Log("handleNamespaceSelector: sending ClearScreen command to clear artifacts")
+			return m, tea.ClearScreen
 		}
 
 	case namespacesLoadedMsg:
@@ -596,69 +670,123 @@ func (m Model) handleSearchMode(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // View renders the UI
 func (m Model) View() string {
+	m.logger.Log("View() ENTRY: width=%d, height=%d, viewMode=%d, selectorVisible=%v, containerSelectorVisible=%v, showHelp=%v, err=%v, searchMode=%v",
+		m.width, m.height, m.viewMode, m.namespaceSelector.IsVisible(),
+		m.containerSelector != nil && m.containerSelector.IsVisible(),
+		m.showHelp, m.err != nil, m.searchMode)
+
 	if m.width == 0 {
-		return "Loading..."
+		result := "Loading..."
+		m.logger.Log("View() EXIT (width=0): returning 'Loading...' (%d bytes)", len(result))
+		return result
 	}
 
 	// Show namespace selector if visible
 	if m.namespaceSelector.IsVisible() {
-		return m.viewNamespaceSelector()
+		m.logger.Log("View() BRANCH: namespace selector visible, calling viewNamespaceSelector()")
+		result := m.viewNamespaceSelector()
+		m.logger.LogWithSample("View() EXIT (namespace selector)", result)
+		return result
 	}
 
 	// Show container selector if visible
 	if m.viewMode == ViewModeContainerSelect && m.containerSelector != nil && m.containerSelector.IsVisible() {
-		return m.viewContainerSelector()
+		m.logger.Log("View() BRANCH: container selector visible, calling viewContainerSelector()")
+		result := m.viewContainerSelector()
+		m.logger.LogWithSample("View() EXIT (container selector)", result)
+		return result
 	}
 
 	// Show help if requested
 	if m.showHelp {
-		return m.viewHelp()
+		m.logger.Log("View() BRANCH: showHelp=true, calling viewHelp()")
+		result := m.viewHelp()
+		m.logger.LogWithSample("View() EXIT (help)", result)
+		return result
 	}
 
 	// Show error if present
 	if m.err != nil {
-		return m.viewError()
+		m.logger.Log("View() BRANCH: err=%v, calling viewError()", m.err)
+		result := m.viewError()
+		m.logger.LogWithSample("View() EXIT (error)", result)
+		return result
 	}
 
 	// Handle special view modes
 	switch m.viewMode {
 	case ViewModeLogStream:
+		m.logger.Log("View() BRANCH: viewMode=LogStream")
 		if m.logViewer != nil {
-			return m.logViewer.View()
+			result := m.logViewer.View()
+			m.logger.LogWithSample("View() EXIT (log stream)", result)
+			return result
 		}
-		return "Log viewer not initialized"
+		result := "Log viewer not initialized"
+		m.logger.Log("View() EXIT (log stream - not initialized): %d bytes", len(result))
+		return result
 
 	case ViewModeDescribe:
-		return m.describeViewer.View()
+		m.logger.Log("View() BRANCH: viewMode=Describe")
+		result := m.describeViewer.View()
+		m.logger.LogWithSample("View() EXIT (describe)", result)
+		return result
 	}
 
 	// Build the main view for list and detail modes
-	return m.renderMainView()
+	m.logger.Log("View() BRANCH: calling renderMainView() (viewMode=%d)", m.viewMode)
+	result := m.renderMainView()
+	m.logger.LogWithSample("View() EXIT (main view)", result)
+	return result
 }
 
 // renderMainView renders the main view with header, tabs, content, and footer
 func (m Model) renderMainView() string {
+	m.logger.Log("renderMainView() START: viewMode=%d, searchMode=%v", m.viewMode, m.searchMode)
+
 	header := m.header.View()
+	m.logger.LogWithSample("renderMainView() header component", header)
+
 	tabs := m.tabs.View()
+	m.logger.LogWithSample("renderMainView() tabs component", tabs)
+
 	footer := m.footer.View()
+	m.logger.LogWithSample("renderMainView() footer component", footer)
 
 	var mainContent string
 	if m.viewMode == ViewModeDetail {
+		m.logger.Log("renderMainView() rendering detail view")
 		mainContent = m.viewDetail()
+		m.logger.LogWithSample("renderMainView() detail content", mainContent)
 	} else {
+		m.logger.Log("renderMainView() rendering list view")
 		mainContent = m.resourceList.View()
+		m.logger.LogWithSample("renderMainView() list content", mainContent)
 	}
 
 	// Add search indicator if in search mode
 	if m.searchMode {
 		searchPrompt := fmt.Sprintf("Search: %s_", m.searchQuery)
+		m.logger.Log("renderMainView() adding search prompt: %s", searchPrompt)
 		mainContent = mainContent + "\n" + searchPrompt
 	}
 
 	// Stack components vertically
 	view := header + "\n" + tabs + "\n" + mainContent + "\n" + footer
 
-	return view
+	// Force a full height view by ensuring we use all available space
+	// This prevents the terminal from scrolling past the header
+	totalLines := lipgloss.Height(view)
+	m.logger.Log("renderMainView() FINAL: total_length=%d bytes, totalLines=%d, terminal_height=%d",
+		len(view), totalLines, m.height)
+	m.logger.Log("  Components: header=%d, tabs=%d, content=%d, footer=%d",
+		len(header), len(tabs), len(mainContent), len(footer))
+
+	// Ensure view fits exactly in terminal height to prevent scrolling
+	return lipgloss.NewStyle().
+		Height(m.height).
+		MaxHeight(m.height).
+		Render(view)
 }
 
 // viewDetail renders the detail view based on current resource type
@@ -691,19 +819,24 @@ func (m Model) viewDetail() string {
 
 // viewNamespaceSelector renders the namespace selector
 func (m Model) viewNamespaceSelector() string {
+	m.logger.Log("viewNamespaceSelector() START: width=%d, height=%d, namespace=%s",
+		m.width, m.height, m.client.GetNamespace())
+
 	// Render the selector centered on screen
 	selector := m.namespaceSelector.View()
+	m.logger.LogWithSample("viewNamespaceSelector() selector.View() output BEFORE lipgloss.Place()", selector)
 
-	return lipgloss.Place(
+	m.logger.Log("viewNamespaceSelector() calling lipgloss.Place() with dimensions %dx%d", m.width, m.height)
+	result := lipgloss.Place(
 		m.width,
 		m.height,
 		lipgloss.Center,
 		lipgloss.Center,
 		selector,
-		lipgloss.WithWhitespaceChars(" "),
-		lipgloss.WithWhitespaceForeground(lipgloss.AdaptiveColor{Light: "0", Dark: "0"}),
-		lipgloss.WithWhitespaceBackground(lipgloss.AdaptiveColor{Light: "0", Dark: "0"}),
 	)
+
+	m.logger.LogWithSample("viewNamespaceSelector() output AFTER lipgloss.Place()", result)
+	return result
 }
 
 // viewContainerSelector renders the container selector
@@ -717,9 +850,6 @@ func (m Model) viewContainerSelector() string {
 		lipgloss.Center,
 		lipgloss.Center,
 		selector,
-		lipgloss.WithWhitespaceChars(" "),
-		lipgloss.WithWhitespaceForeground(lipgloss.AdaptiveColor{Light: "0", Dark: "0"}),
-		lipgloss.WithWhitespaceBackground(lipgloss.AdaptiveColor{Light: "0", Dark: "0"}),
 	)
 }
 

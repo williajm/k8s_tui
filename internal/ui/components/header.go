@@ -3,7 +3,6 @@ package components
 import (
 	"fmt"
 
-	"github.com/charmbracelet/lipgloss"
 	"github.com/williajm/k8s-tui/internal/ui/styles"
 )
 
@@ -78,65 +77,51 @@ func (h *Header) View() string {
 	// Create connection indicator based on state
 	var connIndicator string
 	var connStatus string
-	var connStyle lipgloss.Style
 
 	switch h.connectionState {
 	case ConnectionStateConnected:
 		connIndicator = "◉"
 		connStatus = "Connected"
-		connStyle = styles.StatusRunningStyle
 	case ConnectionStateConnecting:
 		connIndicator = "◌"
 		connStatus = "Connecting..."
-		connStyle = styles.StatusPendingStyle
 	case ConnectionStateReconnecting:
 		connIndicator = "◎"
 		connStatus = "Reconnecting..."
-		connStyle = styles.StatusUnknownStyle
 	case ConnectionStateError:
 		connIndicator = "⊗"
 		connStatus = "Error"
-		connStyle = styles.StatusErrorStyle
 	default: // ConnectionStateDisconnected
 		connIndicator = "○"
 		connStatus = "Disconnected"
-		connStyle = styles.StatusErrorStyle
 	}
 
-	// Build header sections
-	title := styles.TitleStyle.Render("K8S-TUI")
+	// Build header sections - use plain strings, let HeaderStyle handle all styling
+	title := "K8S-TUI"
 	contextInfo := fmt.Sprintf("Context: %s", h.context)
 	nsInfo := fmt.Sprintf("NS: %s", h.namespace)
-	connInfo := connStyle.Render(fmt.Sprintf("%s %s", connIndicator, connStatus))
+	connInfo := fmt.Sprintf("%s %s", connIndicator, connStatus)
 
 	// Calculate spacing
 	separator := " | "
-	contentWidth := lipgloss.Width(title) +
-		lipgloss.Width(contextInfo) +
-		lipgloss.Width(nsInfo) +
-		lipgloss.Width(connInfo) +
-		(len(separator) * 3)
+	contentWidth := len(title) + len(contextInfo) + len(nsInfo) + len(connInfo) + (len(separator) * 3)
 
-	padding := h.width - contentWidth
+	padding := h.width - contentWidth - 2 // Subtract 2 for HeaderStyle padding
 	if padding < 0 {
 		padding = 0
 	}
 
-	// Build the header line
-	headerContent := lipgloss.JoinHorizontal(
-		lipgloss.Left,
-		title,
-		separator,
-		contextInfo,
-		separator,
-		nsInfo,
-		separator,
-		connInfo,
-		lipgloss.NewStyle().Width(padding).Render(""),
-	)
+	// Build the header line as plain text
+	headerContent := title + separator + contextInfo + separator + nsInfo + separator + connInfo
 
-	// Apply header style
+	// Add padding spaces
+	for i := 0; i < padding; i++ {
+		headerContent += " "
+	}
+
+	// Apply header style with explicit height - this handles ALL the styling consistently
 	return styles.HeaderStyle.
 		Width(h.width).
+		Height(1).
 		Render(headerContent)
 }
