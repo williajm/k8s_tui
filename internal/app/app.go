@@ -180,6 +180,7 @@ func (m Model) Init() tea.Cmd {
 	if m.useWatchAPI {
 		// Start watch-based updates
 		return tea.Batch(
+			tea.ClearScreen,
 			m.startWatchMode(),
 			m.waitForWatchEvents(),
 		)
@@ -187,6 +188,7 @@ func (m Model) Init() tea.Cmd {
 
 	// Fallback to polling mode
 	return tea.Batch(
+		tea.ClearScreen,
 		m.loadResources(),
 		m.tickCmd(),
 	)
@@ -220,7 +222,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.tabs.SetWidth(m.width)
 
 		// Resource list and detail view get remaining height
-		remainingHeight := m.height - 6 // Header, tabs, footer, padding
+		// Header=1, Tabs=2 (content+border), Footer=2, Newlines=3 = 8 lines total
+		remainingHeight := m.height - 8
+		if remainingHeight < 5 {
+			remainingHeight = 5 // Minimum viable height
+		}
 		m.resourceList.SetSize(m.width, remainingHeight)
 		m.detailView.SetSize(m.width, remainingHeight)
 
