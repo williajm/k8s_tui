@@ -82,7 +82,7 @@ The codebase follows a clean architecture pattern:
 - **internal/k8s/**: Kubernetes client wrapper with connection management
 - **internal/models/**: Data models for resources (PodInfo, ServiceInfo, DeploymentInfo, StatefulSetInfo)
 - **internal/ui/**: UI layer separated into:
-  - **components/**: Reusable UI components (Header, Footer, ResourceList, Tabs, Selector, DetailView)
+  - **components/**: Reusable UI components (Header, Footer, ResourceList, Tabs, Selector, DetailView, LogViewer, DescribeViewer, ContainerSelector)
   - **keys/**: Keyboard bindings
   - **styles/**: Lipgloss theme and styling
 
@@ -127,10 +127,12 @@ The `k8s.Client` wraps `kubernetes.Clientset` and provides:
 - Context and namespace management (mutable via SetNamespace)
 - Connection testing with timeout
 - Resource fetching methods for multiple resource types:
-  - Pods: `GetPods`, `GetAllPods`, `GetPod`, `GetPodLogs`
+  - Pods: `GetPods`, `GetAllPods`, `GetPod`, `GetPodLogs`, `StreamPodLogs`
   - Services: `GetServices`, `GetAllServices`, `GetService`
   - Deployments: `GetDeployments`, `GetAllDeployments`, `GetDeployment`
   - StatefulSets: `GetStatefulSets`, `GetAllStatefulSets`, `GetStatefulSet`
+  - Events: `GetEvents`, `GetAllEvents`, `GetEventsForResource`
+  - Describe: `DescribePod`, `DescribeService`, `DescribeDeployment`, `DescribeStatefulSet`
   - Namespaces: `GetNamespaces`
 
 ### Resource Models
@@ -140,8 +142,10 @@ Each resource type has a corresponding `*Info` model in `internal/models/`:
 - **ServiceInfo**: Includes type, ClusterIP, ExternalIP, ports, selectors
 - **DeploymentInfo**: Includes replicas, ready, up-to-date, available counts
 - **StatefulSetInfo**: Includes replicas, ready count, update strategy
+- **EventInfo**: Includes type, reason, message, timestamp, involved object
+- **LogEntry**: Includes timestamp, level, message with automatic log level detection
 
-All models provide:
+All resource models provide:
 - `GetStatusSymbol()`: Returns visual indicator (✓, ✗, ○, ⚠, ⊗)
 - `formatAge()`: Converts timestamp to human-readable age (e.g., "5m", "2h", "3d")
 
@@ -149,13 +153,13 @@ All models provide:
 
 **ResourceList** (generic component):
 - Maintains state for all resource types in separate slices
-- Switches display mode via `ResourceType` enum (Pod, Service, Deployment, StatefulSet)
+- Switches display mode via `ResourceType` enum (Pod, Service, Deployment, StatefulSet, Event)
 - Handles navigation (up/down, page up/down, home/end)
 - Supports search filtering
 - Renders appropriate table columns per resource type
 
 **Tabs**:
-- Manages active tab selection (0=Pods, 1=Services, 2=Deployments, 3=StatefulSets)
+- Manages active tab selection (0=Pods, 1=Services, 2=Deployments, 3=StatefulSets, 4=Events)
 - Provides `NextTab()` and `PrevTab()` for keyboard navigation
 - Renders with active/inactive styling
 
@@ -165,10 +169,30 @@ All models provide:
 - Supports up/down navigation within options
 - Returns selected value via `GetSelected()`
 
+**ContainerSelector**:
+- Modal dialog for selecting containers in multi-container pods
+- Shows init containers with differentiation
+- Keyboard navigation (up/down/enter/esc)
+- Returns selected container name
+
 **DetailView**:
 - Renders detailed information for selected resource
 - Type-specific methods: `ViewPod()`, `ViewService()`, `ViewDeployment()`, `ViewStatefulSet()`
 - Displays formatted key-value pairs using `styles.RenderDetailRow()`
+
+**LogViewer**:
+- Real-time log streaming with follow mode
+- Search/filter within logs
+- Timestamp toggle
+- Log level detection and color coding
+- Circular buffer (10,000 lines) for memory efficiency
+- Previous container logs support
+
+**DescribeViewer**:
+- Multiple format support (Describe, YAML, JSON)
+- Format switching with keyboard shortcuts (d/y/j)
+- Structured describe output with sections
+- Scrollable viewport for large resources
 
 ### Component Interaction Pattern
 
@@ -279,8 +303,8 @@ Features:
 
 ---
 
-### Phase 2 - Core Features (v0.2.0) ✅ **READY FOR PR** 🚀
-**Status**: Complete on `dev` branch, awaiting merge to `main`
+### Phase 2 - Core Features (v0.2.0) ✅ **MERGED TO MAIN**
+**Status**: Complete and in production on `main` branch
 
 Features:
 - ✅ Multi-resource support (Pods, Services, Deployments, StatefulSets)
@@ -294,39 +318,62 @@ Features:
 - ✅ Resource-specific data models with status symbols
 - ✅ Component architecture (Tabs, Selector, DetailView)
 
-**Branch**: Currently on `dev` (commit d9bb503), needs PR to `main`
-
-**Next Steps**:
-1. Run linters and tests before creating PR
-2. Create PR: `dev` → `main`
-3. Merge after CI passes
+**Branch**: Merged to `main` branch
 
 ---
 
-### Phase 3 - Observability & Logs (v0.3.0) 📋 **PLANNED**
-**Status**: Not started
+### Phase 3 - Observability & Logs (v0.3.0) ✅ **MERGED TO MAIN**
+**Status**: Complete and in production on `main` branch
 
 **Goal**: Add log viewing, events, and resource inspection capabilities
 
-Planned Features:
-- [ ] Pod log streaming view ('l' key from pod list/detail)
-  - [ ] Container selection for multi-container pods
-  - [ ] Follow mode (live streaming)
-  - [ ] Tail line count configuration
-  - [ ] Log filtering/search within logs
-  - [ ] Previous container logs (for restarted pods)
-- [ ] Kubernetes events display
-  - [ ] Event list view (new tab)
-  - [ ] Resource-specific events in detail view
-  - [ ] Event filtering by type (Normal, Warning, Error)
-  - [ ] Age and reason display
-- [ ] Describe functionality ('d' key from detail view)
-  - [ ] Full resource YAML/JSON view
-  - [ ] Formatted describe output (like `kubectl describe`)
-  - [ ] Syntax highlighting for YAML/JSON
-  - [ ] Copy-to-clipboard support
+Features:
+- ✅ Pod log streaming view ('l' key from pod list/detail)
+  - ✅ Container selection for multi-container pods
+  - ✅ Follow mode (live streaming)
+  - ✅ Log filtering/search within logs
+  - ✅ Timestamp toggle
+  - ✅ Log level detection and color coding
+  - ✅ Circular buffer (10,000 lines) for memory efficiency
+  - ✅ Previous container logs support
+- ✅ Kubernetes events display
+  - ✅ Event list view (new tab - 5th tab)
+  - ✅ Event type filtering (Normal, Warning, Error)
+  - ✅ Time-based sorting with age display
+  - ✅ Event type symbols and color coding
+  - ✅ Resource-specific event support
+- ✅ Describe functionality ('d' key from detail view)
+  - ✅ Multiple format support (Describe, YAML, JSON)
+  - ✅ Format switching with keyboard shortcuts (d/y/j)
+  - ✅ Structured describe output with sections
+  - ✅ Full resource inspection capabilities
+  - ✅ Scrollable viewport for large resources
 
-**Branch**: Will be developed on `dev` branch
+**UI Improvements**:
+- ✅ Comprehensive footer with all keyboard shortcuts (10+ shortcuts across 2 lines)
+- ✅ View-specific footers (log viewer, describe viewer) with context-aware shortcuts
+- ✅ Standardized 'q' behavior: quit in main views, back in special views
+- ✅ Consistent [Esc]/[Backspace] for back navigation
+
+**Bug Fixes**:
+- ✅ Fixed log viewer footer scrolling issue
+- ✅ Fixed 'q' key behavior in special views
+- ✅ Improved namespace selector overlay rendering
+- ✅ Fixed golangci-lint configuration warnings
+
+**Technical Implementation**:
+- Added `internal/k8s/logs.go` - Log streaming with context management
+- Added `internal/k8s/events.go` - Event fetching and filtering
+- Added `internal/k8s/describe.go` - Resource describe operations
+- Added `internal/models/log.go` - Log entry models with level detection
+- Added `internal/models/event.go` - Event info models
+- Added `internal/models/describe.go` - Describe data structures
+- Added `internal/ui/components/logviewer.go` - Log viewer component
+- Added `internal/ui/components/describe.go` - Describe viewer component
+- Added `internal/ui/components/container_selector.go` - Container selection modal
+- Comprehensive unit tests for all new components (51 new tests)
+
+**Branch**: Merged to `main` branch
 
 ---
 
@@ -435,11 +482,11 @@ Planned Features:
 | Phase | Version | Status | Branch | In Main |
 |-------|---------|--------|--------|---------|
 | Phase 1 - Foundation | v0.1.0 | ✅ Complete | `main` | ✅ Yes |
-| Phase 2 - Core Features | v0.2.0 | ✅ Complete | `dev` | ❌ No (ready for PR) |
-| Phase 3 - Observability | v0.3.0 | 📋 Planned | - | ❌ No |
+| Phase 2 - Core Features | v0.2.0 | ✅ Complete | `main` | ✅ Yes |
+| Phase 3 - Observability | v0.3.0 | ✅ Complete | `main` | ✅ Yes |
 | Phase 4 - Watch API | v0.4.0 | 📋 Planned | - | ❌ No |
 | Phase 5 - Configuration | v0.5.0 | 📋 Planned | - | ❌ No |
 | Phase 6 - More Resources | v0.6.0 | 📋 Planned | - | ❌ No |
 | Phase 7 - Write Ops | v0.7.0 | 📋 Planned | - | ❌ No |
 
-**Current Focus**: Merging Phase 2 to `main` branch
+**Current Focus**: Planning Phase 4 or future enhancements
