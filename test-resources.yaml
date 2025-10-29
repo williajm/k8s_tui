@@ -439,3 +439,105 @@ spec:
       - name: app
         image: nonexistent-image:invalid-tag
         imagePullPolicy: Always
+
+---
+# Pod with continuous logging (for testing log viewer and follow mode)
+apiVersion: v1
+kind: Pod
+metadata:
+  name: verbose-logger
+  namespace: k8s-tui-test
+  labels:
+    app: logger
+    env: test
+spec:
+  containers:
+  - name: logger
+    image: busybox:latest
+    command:
+    - sh
+    - -c
+    - |
+      counter=0
+      while true; do
+        counter=$((counter + 1))
+        echo "$(date '+%Y-%m-%d %H:%M:%S') [INFO] Log entry #${counter}: Application running normally"
+        sleep 2
+        echo "$(date '+%Y-%m-%d %H:%M:%S') [DEBUG] Processing request ${counter}"
+        sleep 1
+        echo "$(date '+%Y-%m-%d %H:%M:%S') [WARN] Cache miss for key-${counter}"
+        sleep 2
+        if [ $((counter % 10)) -eq 0 ]; then
+          echo "$(date '+%Y-%m-%d %H:%M:%S') [ERROR] Simulated error for testing (entry ${counter})"
+        fi
+      done
+
+---
+# Pod that crashes and restarts (for testing restart events and previous container logs)
+apiVersion: v1
+kind: Pod
+metadata:
+  name: crash-loop-pod
+  namespace: k8s-tui-test
+  labels:
+    app: crasher
+    env: test
+spec:
+  restartPolicy: Always
+  containers:
+  - name: crasher
+    image: busybox:latest
+    command:
+    - sh
+    - -c
+    - |
+      echo "$(date '+%Y-%m-%d %H:%M:%S') [INFO] Container starting..."
+      echo "$(date '+%Y-%m-%d %H:%M:%S') [INFO] Initializing application..."
+      sleep 5
+      echo "$(date '+%Y-%m-%d %H:%M:%S') [ERROR] Fatal error occurred!"
+      echo "$(date '+%Y-%m-%d %H:%M:%S') [ERROR] Stack trace: line 42 in main.sh"
+      echo "$(date '+%Y-%m-%d %H:%M:%S') [ERROR] Exiting with code 1"
+      exit 1
+
+---
+# Pod with multiple containers for testing container selection in log viewer
+apiVersion: v1
+kind: Pod
+metadata:
+  name: log-test-multi
+  namespace: k8s-tui-test
+  labels:
+    app: log-test
+    env: test
+spec:
+  containers:
+  - name: frontend
+    image: busybox:latest
+    command:
+    - sh
+    - -c
+    - |
+      while true; do
+        echo "[FRONTEND] $(date '+%H:%M:%S') Serving request from user-$((RANDOM % 100))"
+        sleep 3
+      done
+  - name: backend
+    image: busybox:latest
+    command:
+    - sh
+    - -c
+    - |
+      while true; do
+        echo "[BACKEND] $(date '+%H:%M:%S') Processing API call to /api/data"
+        sleep 5
+      done
+  - name: database
+    image: busybox:latest
+    command:
+    - sh
+    - -c
+    - |
+      while true; do
+        echo "[DATABASE] $(date '+%H:%M:%S') Query executed in $((RANDOM % 100))ms"
+        sleep 4
+      done

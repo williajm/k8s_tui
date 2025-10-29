@@ -17,6 +17,7 @@ const (
 	ResourceTypeService
 	ResourceTypeDeployment
 	ResourceTypeStatefulSet
+	ResourceTypeEvent
 )
 
 // ResourceList represents a generic list of resources
@@ -26,6 +27,7 @@ type ResourceList struct {
 	services     []models.ServiceInfo
 	deployments  []models.DeploymentInfo
 	statefulSets []models.StatefulSetInfo
+	events       []models.EventInfo
 	selectedIdx  int
 	viewportTop  int
 	width        int
@@ -41,6 +43,7 @@ func NewResourceList(resourceType ResourceType) *ResourceList {
 		services:     []models.ServiceInfo{},
 		deployments:  []models.DeploymentInfo{},
 		statefulSets: []models.StatefulSetInfo{},
+		events:       []models.EventInfo{},
 		selectedIdx:  0,
 		viewportTop:  0,
 		width:        80,
@@ -83,6 +86,14 @@ func (l *ResourceList) SetDeployments(deployments []models.DeploymentInfo) {
 func (l *ResourceList) SetStatefulSets(statefulSets []models.StatefulSetInfo) {
 	l.statefulSets = statefulSets
 	if l.selectedIdx >= len(l.statefulSets) {
+		l.selectedIdx = 0
+	}
+}
+
+// SetEvents updates the list of events
+func (l *ResourceList) SetEvents(events []models.EventInfo) {
+	l.events = events
+	if l.selectedIdx >= len(l.events) {
 		l.selectedIdx = 0
 	}
 }
@@ -178,6 +189,14 @@ func (l *ResourceList) GetSelectedStatefulSet() *models.StatefulSetInfo {
 	return nil
 }
 
+// GetSelectedEvent returns the currently selected event
+func (l *ResourceList) GetSelectedEvent() *models.EventInfo {
+	if l.resourceType == ResourceTypeEvent && l.selectedIdx >= 0 && l.selectedIdx < len(l.events) {
+		return &l.events[l.selectedIdx]
+	}
+	return nil
+}
+
 // getItemCount returns the number of items in the current resource list
 func (l *ResourceList) getItemCount() int {
 	switch l.resourceType {
@@ -189,6 +208,8 @@ func (l *ResourceList) getItemCount() int {
 		return len(l.deployments)
 	case ResourceTypeStatefulSet:
 		return len(l.statefulSets)
+	case ResourceTypeEvent:
+		return len(l.events)
 	default:
 		return 0
 	}
@@ -326,6 +347,23 @@ func (l *ResourceList) renderHeader() string {
 			readyWidth, "READY",
 			ageWidth, "AGE",
 		)
+
+	case ResourceTypeEvent:
+		typeWidth := 8
+		ageWidth := 8
+		reasonWidth := 20
+		objectWidth := 25
+		messageWidth := 30
+
+		header = fmt.Sprintf(
+			"%-3s %-*s %-*s %-*s %-*s %-*s",
+			"",
+			typeWidth, "TYPE",
+			ageWidth, "AGE",
+			reasonWidth, "REASON",
+			objectWidth, "OBJECT",
+			messageWidth, "MESSAGE",
+		)
 	}
 
 	return styles.TableHeaderStyle.
@@ -334,126 +372,24 @@ func (l *ResourceList) renderHeader() string {
 }
 
 // renderRow renders a single row based on resource type
-//
-//nolint:funlen // Handles rendering for multiple resource types
 func (l *ResourceList) renderRow(idx int, selected bool) string {
 	var row string
-	var symbol string
 
 	switch l.resourceType {
 	case ResourceTypePod:
-		if idx >= len(l.pods) {
-			return ""
-		}
-		pod := l.pods[idx]
-		symbol = pod.GetStatusSymbol()
-
-		nameWidth := 30
-		readyWidth := 8
-		statusWidth := 20
-		restartsWidth := 10
-		ageWidth := 8
-
-		name := pod.Name
-		if len(name) > nameWidth {
-			name = name[:nameWidth-3] + "..."
-		}
-
-		statusText := pod.Status
-		statusStyle := styles.StatusStyle(pod.Status)
-		statusRendered := statusStyle.Width(statusWidth).Render(statusText)
-
-		row = fmt.Sprintf(
-			"%s %-*s %-*s %s %*d %-*s",
-			symbol,
-			nameWidth, name,
-			readyWidth, pod.Ready,
-			statusRendered,
-			restartsWidth, pod.Restarts,
-			ageWidth, pod.Age,
-		)
-
+		row = l.renderPodRow(idx)
 	case ResourceTypeService:
-		if idx >= len(l.services) {
-			return ""
-		}
-		svc := l.services[idx]
-		symbol = svc.GetStatusSymbol()
-
-		nameWidth := 25
-		typeWidth := 12
-		clusterIPWidth := 16
-		externalIPWidth := 16
-		portsWidth := 15
-		ageWidth := 8
-
-		name := svc.Name
-		if len(name) > nameWidth {
-			name = name[:nameWidth-3] + "..."
-		}
-
-		row = fmt.Sprintf(
-			"%s %-*s %-*s %-*s %-*s %-*s %-*s",
-			symbol,
-			nameWidth, name,
-			typeWidth, svc.Type,
-			clusterIPWidth, svc.ClusterIP,
-			externalIPWidth, svc.ExternalIP,
-			portsWidth, svc.Ports,
-			ageWidth, svc.Age,
-		)
-
+		row = l.renderServiceRow(idx)
 	case ResourceTypeDeployment:
-		if idx >= len(l.deployments) {
-			return ""
-		}
-		dep := l.deployments[idx]
-		symbol = dep.GetStatusSymbol()
-
-		nameWidth := 30
-		readyWidth := 10
-		upToDateWidth := 12
-		availableWidth := 12
-		ageWidth := 8
-
-		name := dep.Name
-		if len(name) > nameWidth {
-			name = name[:nameWidth-3] + "..."
-		}
-
-		row = fmt.Sprintf(
-			"%s %-*s %-*s %-*d %-*d %-*s",
-			symbol,
-			nameWidth, name,
-			readyWidth, dep.Ready,
-			upToDateWidth, dep.UpToDate,
-			availableWidth, dep.Available,
-			ageWidth, dep.Age,
-		)
-
+		row = l.renderDeploymentRow(idx)
 	case ResourceTypeStatefulSet:
-		if idx >= len(l.statefulSets) {
-			return ""
-		}
-		sts := l.statefulSets[idx]
-		symbol = sts.GetStatusSymbol()
+		row = l.renderStatefulSetRow(idx)
+	case ResourceTypeEvent:
+		row = l.renderEventRow(idx)
+	}
 
-		nameWidth := 30
-		readyWidth := 10
-		ageWidth := 8
-
-		name := sts.Name
-		if len(name) > nameWidth {
-			name = name[:nameWidth-3] + "..."
-		}
-
-		row = fmt.Sprintf(
-			"%s %-*s %-*s %-*s",
-			symbol,
-			nameWidth, name,
-			readyWidth, sts.Ready,
-			ageWidth, sts.Age,
-		)
+	if row == "" {
+		return ""
 	}
 
 	// Apply selection style
@@ -466,4 +402,163 @@ func (l *ResourceList) renderRow(idx int, selected bool) string {
 	return styles.ListItemStyle.
 		Width(l.width - 4).
 		Render(row)
+}
+
+func (l *ResourceList) renderPodRow(idx int) string {
+	if idx >= len(l.pods) {
+		return ""
+	}
+	pod := l.pods[idx]
+	symbol := pod.GetStatusSymbol()
+
+	nameWidth := 30
+	readyWidth := 8
+	statusWidth := 20
+	restartsWidth := 10
+	ageWidth := 8
+
+	name := pod.Name
+	if len(name) > nameWidth {
+		name = name[:nameWidth-3] + "..."
+	}
+
+	statusText := pod.Status
+	statusStyle := styles.StatusStyle(pod.Status)
+	statusRendered := statusStyle.Width(statusWidth).Render(statusText)
+
+	return fmt.Sprintf(
+		"%s %-*s %-*s %s %*d %-*s",
+		symbol,
+		nameWidth, name,
+		readyWidth, pod.Ready,
+		statusRendered,
+		restartsWidth, pod.Restarts,
+		ageWidth, pod.Age,
+	)
+}
+
+func (l *ResourceList) renderServiceRow(idx int) string {
+	if idx >= len(l.services) {
+		return ""
+	}
+	svc := l.services[idx]
+	symbol := svc.GetStatusSymbol()
+
+	nameWidth := 25
+	typeWidth := 12
+	clusterIPWidth := 16
+	externalIPWidth := 16
+	portsWidth := 15
+	ageWidth := 8
+
+	name := svc.Name
+	if len(name) > nameWidth {
+		name = name[:nameWidth-3] + "..."
+	}
+
+	return fmt.Sprintf(
+		"%s %-*s %-*s %-*s %-*s %-*s %-*s",
+		symbol,
+		nameWidth, name,
+		typeWidth, svc.Type,
+		clusterIPWidth, svc.ClusterIP,
+		externalIPWidth, svc.ExternalIP,
+		portsWidth, svc.Ports,
+		ageWidth, svc.Age,
+	)
+}
+
+func (l *ResourceList) renderDeploymentRow(idx int) string {
+	if idx >= len(l.deployments) {
+		return ""
+	}
+	dep := l.deployments[idx]
+	symbol := dep.GetStatusSymbol()
+
+	nameWidth := 30
+	readyWidth := 10
+	upToDateWidth := 12
+	availableWidth := 12
+	ageWidth := 8
+
+	name := dep.Name
+	if len(name) > nameWidth {
+		name = name[:nameWidth-3] + "..."
+	}
+
+	return fmt.Sprintf(
+		"%s %-*s %-*s %-*d %-*d %-*s",
+		symbol,
+		nameWidth, name,
+		readyWidth, dep.Ready,
+		upToDateWidth, dep.UpToDate,
+		availableWidth, dep.Available,
+		ageWidth, dep.Age,
+	)
+}
+
+func (l *ResourceList) renderStatefulSetRow(idx int) string {
+	if idx >= len(l.statefulSets) {
+		return ""
+	}
+	sts := l.statefulSets[idx]
+	symbol := sts.GetStatusSymbol()
+
+	nameWidth := 30
+	readyWidth := 10
+	ageWidth := 8
+
+	name := sts.Name
+	if len(name) > nameWidth {
+		name = name[:nameWidth-3] + "..."
+	}
+
+	return fmt.Sprintf(
+		"%s %-*s %-*s %-*s",
+		symbol,
+		nameWidth, name,
+		readyWidth, sts.Ready,
+		ageWidth, sts.Age,
+	)
+}
+
+func (l *ResourceList) renderEventRow(idx int) string {
+	if idx >= len(l.events) {
+		return ""
+	}
+	event := l.events[idx]
+	symbol := event.GetTypeSymbol()
+
+	typeWidth := 8
+	ageWidth := 8
+	reasonWidth := 20
+	objectWidth := 25
+	messageWidth := 30
+
+	eventType := event.Type
+	if len(eventType) > typeWidth {
+		eventType = eventType[:typeWidth-3] + "..."
+	}
+
+	reason := event.Reason
+	if len(reason) > reasonWidth {
+		reason = reason[:reasonWidth-3] + "..."
+	}
+
+	object := event.Object
+	if len(object) > objectWidth {
+		object = object[:objectWidth-3] + "..."
+	}
+
+	message := event.GetMessagePreview(messageWidth)
+
+	return fmt.Sprintf(
+		"%s %-*s %-*s %-*s %-*s %-*s",
+		symbol,
+		typeWidth, eventType,
+		ageWidth, event.FormatAge(),
+		reasonWidth, reason,
+		objectWidth, object,
+		messageWidth, message,
+	)
 }

@@ -7,6 +7,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/williajm/k8s-tui/internal/config"
 	"github.com/williajm/k8s-tui/internal/k8s"
 	"github.com/williajm/k8s-tui/internal/models"
@@ -20,6 +21,9 @@ type ViewMode int
 const (
 	ViewModeList ViewMode = iota
 	ViewModeDetail
+	ViewModeLogStream
+	ViewModeDescribe
+	ViewModeContainerSelect
 )
 
 // Model represents the application state
@@ -34,6 +38,9 @@ type Model struct {
 	resourceList      *components.ResourceList
 	detailView        *components.DetailView
 	namespaceSelector *components.Selector
+	logViewer         *components.LogViewer
+	describeViewer    *components.DescribeViewer
+	containerSelector *components.ContainerSelector
 	width             int
 	height            int
 	err               error
@@ -44,6 +51,9 @@ type Model struct {
 	searchMode        bool
 	searchQuery       string
 	refreshInterval   time.Duration
+	logStreamCancel   context.CancelFunc
+	logStreamActive   bool
+	previousViewMode  ViewMode
 }
 
 // Message types
@@ -53,11 +63,38 @@ type resourcesLoadedMsg struct {
 	services     []models.ServiceInfo
 	deployments  []models.DeploymentInfo
 	statefulSets []models.StatefulSetInfo
+	events       []models.EventInfo
 	err          error
 }
 
 type namespacesLoadedMsg struct {
 	namespaces []string
+	err        error
+}
+
+type logEntryMsg struct {
+	entry   models.LogEntry
+	nextCmd tea.Cmd
+}
+
+type logStreamStartedMsg struct {
+	cancel context.CancelFunc
+}
+
+type logStreamErrorMsg struct {
+	err error
+}
+
+type logStreamStoppedMsg struct{}
+
+type describeLoadedMsg struct {
+	data *models.DescribeData
+	yaml string
+	json string
+}
+
+type containersLoadedMsg struct {
+	containers []string
 	err        error
 }
 
@@ -100,11 +137,16 @@ func NewModelWithConfig(client *k8s.Client, cfg *config.Config) Model {
 		resourceList:      components.NewResourceList(components.ResourceTypePod),
 		detailView:        components.NewDetailView(),
 		namespaceSelector: components.NewSelector("Select Namespace"),
+		logViewer:         nil, // Created on demand
+		describeViewer:    components.NewDescribeViewer(),
+		containerSelector: nil, // Created on demand
 		connected:         false,
 		loading:           true,
 		viewMode:          ViewModeList,
 		searchMode:        false,
 		refreshInterval:   cfg.GetRefreshInterval(),
+		logStreamActive:   false,
+		previousViewMode:  ViewModeList,
 	}
 }
 
@@ -118,7 +160,7 @@ func (m Model) Init() tea.Cmd {
 
 // Update handles messages and updates the model
 //
-//nolint:gocyclo // Complex state machine, acceptable for main update function
+//nolint:gocyclo,funlen // Complex state machine, acceptable for main update function
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Handle namespace selector first if visible
 	if m.namespaceSelector.IsVisible() {
@@ -172,9 +214,60 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.resourceList.SetDeployments(msg.deployments)
 			case components.ResourceTypeStatefulSet:
 				m.resourceList.SetStatefulSets(msg.statefulSets)
+			case components.ResourceTypeEvent:
+				m.resourceList.SetEvents(msg.events)
 			}
 		}
 		m.header.SetConnected(m.connected)
+
+	case logStreamStartedMsg:
+		m.logStreamActive = true
+		m.logStreamCancel = msg.cancel
+
+	case logEntryMsg:
+		if m.logViewer != nil {
+			m.logViewer.AddLogEntry(msg.entry)
+		}
+		// Chain to next log entry if stream is active
+		if m.logStreamActive && msg.nextCmd != nil {
+			return m, msg.nextCmd
+		}
+
+	case logStreamErrorMsg:
+		m.logStreamActive = false
+		if m.logStreamCancel != nil {
+			m.logStreamCancel()
+		}
+		m.err = msg.err
+		m.viewMode = m.previousViewMode
+
+	case logStreamStoppedMsg:
+		m.logStreamActive = false
+
+	case describeLoadedMsg:
+		m.describeViewer.SetData(msg.data)
+		m.describeViewer.SetYAML(msg.yaml)
+		m.describeViewer.SetJSON(msg.json)
+
+	case containersLoadedMsg:
+		if msg.err != nil {
+			m.err = msg.err
+			m.viewMode = m.previousViewMode
+		} else if len(msg.containers) == 1 {
+			// Single container, go directly to logs
+			pod := m.resourceList.GetSelectedPod()
+			if pod != nil {
+				m.logViewer = components.NewLogViewer(pod.Name, msg.containers[0])
+				m.logViewer.SetSize(m.width, m.height-6)
+				m.viewMode = ViewModeLogStream
+				return m, m.startLogStream(msg.containers[0])
+			}
+		} else {
+			// Multiple containers, show selector
+			m.containerSelector = components.NewContainerSelector(msg.containers)
+			m.containerSelector.Show()
+			m.viewMode = ViewModeContainerSelect
+		}
 
 	case namespacesLoadedMsg:
 		if msg.err == nil && len(msg.namespaces) > 0 {
@@ -200,6 +293,28 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 //
 //nolint:gocyclo,funlen // Handles many keyboard commands, complexity and length are acceptable
 func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Check if 'q' should act as Back in special view modes (not Quit)
+	if msg.String() == "q" {
+		switch m.viewMode {
+		case ViewModeLogStream:
+			// Stop log streaming
+			if m.logStreamCancel != nil {
+				m.logStreamCancel()
+			}
+			m.viewMode = m.previousViewMode
+			return m, nil
+		case ViewModeDescribe:
+			m.viewMode = m.previousViewMode
+			return m, nil
+		case ViewModeContainerSelect:
+			if m.containerSelector != nil {
+				m.containerSelector.Hide()
+			}
+			m.viewMode = m.previousViewMode
+			return m, nil
+		}
+	}
+
 	// Global keys
 	switch {
 	case key.Matches(msg, m.keyMap.Quit):
@@ -241,18 +356,69 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.loadResources()
 
 	case key.Matches(msg, m.keyMap.Enter):
-		// Enter detail view
+		// Enter detail view (but not if we're in special modes that handle Enter themselves)
 		if m.viewMode == ViewModeList {
 			m.viewMode = ViewModeDetail
-		}
-		return m, nil
-
-	case key.Matches(msg, m.keyMap.Back):
-		// Exit detail view
-		if m.viewMode == ViewModeDetail {
-			m.viewMode = ViewModeList
 			return m, nil
 		}
+		// Don't handle Enter here for other view modes - let them handle it
+		// (ViewModeContainerSelect, ViewModeDescribe, etc.)
+
+	case key.Matches(msg, m.keyMap.Back):
+		// Handle back based on view mode
+		switch m.viewMode {
+		case ViewModeDetail:
+			m.viewMode = ViewModeList
+			return m, nil
+		case ViewModeLogStream:
+			// Stop log streaming
+			if m.logStreamCancel != nil {
+				m.logStreamCancel()
+			}
+			m.viewMode = m.previousViewMode
+			return m, nil
+		case ViewModeDescribe:
+			m.viewMode = m.previousViewMode
+			return m, nil
+		}
+
+	case key.Matches(msg, m.keyMap.Logs):
+		// View logs for selected pod
+		if m.viewMode == ViewModeList || m.viewMode == ViewModeDetail {
+			if m.tabs.GetActiveTab() == int(components.ResourceTypePod) {
+				pod := m.resourceList.GetSelectedPod()
+				if pod != nil {
+					m.previousViewMode = m.viewMode
+					return m, m.loadContainers(pod.Namespace, pod.Name)
+				}
+			}
+		}
+
+	case key.Matches(msg, m.keyMap.Describe):
+		// Show describe view for selected resource
+		if m.viewMode == ViewModeDetail {
+			m.previousViewMode = m.viewMode
+			m.viewMode = ViewModeDescribe
+			return m, m.loadDescribe()
+		}
+
+	case key.Matches(msg, m.keyMap.Events):
+		// Jump to Events tab
+		m.tabs.SetActiveTab(4)
+		m.resourceList.SetResourceType(components.ResourceTypeEvent)
+		m.viewMode = ViewModeList
+		m.loading = true
+		return m, m.loadResources()
+	}
+
+	// Handle view-specific keys
+	switch m.viewMode {
+	case ViewModeLogStream:
+		return m.handleLogViewerKeys(msg)
+	case ViewModeDescribe:
+		return m.handleDescribeViewerKeys(msg)
+	case ViewModeContainerSelect:
+		return m.handleContainerSelectorKeys(msg)
 	}
 
 	// Don't process other keys if help is shown
@@ -309,12 +475,15 @@ func (m Model) handleNamespaceSelector(msg tea.Msg) (tea.Model, tea.Cmd) {
 				)
 				m.namespaceSelector.Hide()
 				m.loading = true
-				return m, m.loadResources()
+				// Use tea.Batch to clear screen and reload resources
+				return m, tea.Batch(tea.ClearScreen, m.loadResources())
 			}
 
 		case key.Matches(msg, m.keyMap.Back), key.Matches(msg, m.keyMap.Quit):
 			// Cancel namespace selection
 			m.namespaceSelector.Hide()
+			// Clear screen to remove any artifacts
+			return m, tea.ClearScreen
 		}
 
 	case namespacesLoadedMsg:
@@ -367,6 +536,11 @@ func (m Model) View() string {
 		return m.viewNamespaceSelector()
 	}
 
+	// Show container selector if visible
+	if m.viewMode == ViewModeContainerSelect && m.containerSelector != nil && m.containerSelector.IsVisible() {
+		return m.viewContainerSelector()
+	}
+
 	// Show help if requested
 	if m.showHelp {
 		return m.viewHelp()
@@ -377,7 +551,19 @@ func (m Model) View() string {
 		return m.viewError()
 	}
 
-	// Build the main view
+	// Handle special view modes
+	switch m.viewMode {
+	case ViewModeLogStream:
+		if m.logViewer != nil {
+			return m.logViewer.View()
+		}
+		return "Log viewer not initialized"
+
+	case ViewModeDescribe:
+		return m.describeViewer.View()
+	}
+
+	// Build the main view for list and detail modes
 	header := m.header.View()
 	tabs := m.tabs.View()
 	footer := m.footer.View()
@@ -420,6 +606,10 @@ func (m Model) viewDetail() string {
 		statefulSet := m.resourceList.GetSelectedStatefulSet()
 		return m.detailView.ViewStatefulSet(statefulSet)
 
+	case components.ResourceTypeEvent:
+		event := m.resourceList.GetSelectedEvent()
+		return m.detailView.ViewEvent(event)
+
 	default:
 		return "Unknown resource type"
 	}
@@ -427,12 +617,50 @@ func (m Model) viewDetail() string {
 
 // viewNamespaceSelector renders the namespace selector
 func (m Model) viewNamespaceSelector() string {
-	header := m.header.View()
-	footer := m.footer.View()
+	// TODO: Fix rendering artifact - When dismissing the namespace selector, a line
+	// from the header (showing context, namespace, and "Connected" status) sometimes
+	// remains visible at the top of the screen. This happens inconsistently with
+	// certain namespace names (longer names or names from k8s system namespaces).
+	// The current lipgloss.Place overlay and tea.ClearScreen approach doesn't fully
+	// resolve the issue. Need to investigate alternative approaches such as:
+	// - Using tea.ClearScrollback in addition to tea.ClearScreen
+	// - Rendering the full background view underneath the overlay
+	// - Using alternate screen buffer for modals
+	// - Manual ANSI escape sequences for screen clearing
+
+	// Render the selector
 	selector := m.namespaceSelector.View()
 
-	// Simple overlay (center the selector)
-	return header + "\n\n" + selector + "\n\n" + footer
+	// Use lipgloss.Place with explicit whitespace filling to ensure full screen coverage
+	// This prevents rendering artifacts when dismissing the selector
+	return lipgloss.Place(
+		m.width,
+		m.height,
+		lipgloss.Center,
+		lipgloss.Center,
+		selector,
+		lipgloss.WithWhitespaceChars(" "),
+		lipgloss.WithWhitespaceForeground(lipgloss.Color("0")),
+		lipgloss.WithWhitespaceBackground(lipgloss.Color("0")),
+	)
+}
+
+// viewContainerSelector renders the container selector
+func (m Model) viewContainerSelector() string {
+	// Render the selector
+	selector := m.containerSelector.View()
+
+	// Use lipgloss.Place with explicit whitespace filling to ensure full screen coverage
+	return lipgloss.Place(
+		m.width,
+		m.height,
+		lipgloss.Center,
+		lipgloss.Center,
+		selector,
+		lipgloss.WithWhitespaceChars(" "),
+		lipgloss.WithWhitespaceForeground(lipgloss.Color("0")),
+		lipgloss.WithWhitespaceBackground(lipgloss.Color("0")),
+	)
 }
 
 // viewHelp renders the help screen
@@ -477,56 +705,79 @@ func (m Model) loadResources() tea.Cmd {
 
 		switch resourceType {
 		case components.ResourceTypePod:
-			podList, err := m.client.GetPods(ctx, namespace)
-			if err != nil {
-				msg.err = err
-				return msg
-			}
-			pods := make([]models.PodInfo, len(podList.Items))
-			for i, pod := range podList.Items {
-				pods[i] = models.NewPodInfo(&pod)
-			}
-			msg.pods = pods
-
+			msg.pods, msg.err = m.loadPods(ctx, namespace)
 		case components.ResourceTypeService:
-			serviceList, err := m.client.GetServices(ctx, namespace)
-			if err != nil {
-				msg.err = err
-				return msg
-			}
-			services := make([]models.ServiceInfo, len(serviceList.Items))
-			for i, svc := range serviceList.Items {
-				services[i] = models.NewServiceInfo(&svc)
-			}
-			msg.services = services
-
+			msg.services, msg.err = m.loadServices(ctx, namespace)
 		case components.ResourceTypeDeployment:
-			deploymentList, err := m.client.GetDeployments(ctx, namespace)
-			if err != nil {
-				msg.err = err
-				return msg
-			}
-			deployments := make([]models.DeploymentInfo, len(deploymentList.Items))
-			for i, dep := range deploymentList.Items {
-				deployments[i] = models.NewDeploymentInfo(&dep)
-			}
-			msg.deployments = deployments
-
+			msg.deployments, msg.err = m.loadDeployments(ctx, namespace)
 		case components.ResourceTypeStatefulSet:
-			statefulSetList, err := m.client.GetStatefulSets(ctx, namespace)
-			if err != nil {
-				msg.err = err
-				return msg
-			}
-			statefulSets := make([]models.StatefulSetInfo, len(statefulSetList.Items))
-			for i, sts := range statefulSetList.Items {
-				statefulSets[i] = models.NewStatefulSetInfo(&sts)
-			}
-			msg.statefulSets = statefulSets
+			msg.statefulSets, msg.err = m.loadStatefulSets(ctx, namespace)
+		case components.ResourceTypeEvent:
+			msg.events, msg.err = m.loadEvents(ctx, namespace)
 		}
 
 		return msg
 	}
+}
+
+func (m Model) loadPods(ctx context.Context, namespace string) ([]models.PodInfo, error) {
+	podList, err := m.client.GetPods(ctx, namespace)
+	if err != nil {
+		return nil, err
+	}
+	pods := make([]models.PodInfo, len(podList.Items))
+	for i, pod := range podList.Items {
+		pods[i] = models.NewPodInfo(&pod)
+	}
+	return pods, nil
+}
+
+func (m Model) loadServices(ctx context.Context, namespace string) ([]models.ServiceInfo, error) {
+	serviceList, err := m.client.GetServices(ctx, namespace)
+	if err != nil {
+		return nil, err
+	}
+	services := make([]models.ServiceInfo, len(serviceList.Items))
+	for i, svc := range serviceList.Items {
+		services[i] = models.NewServiceInfo(&svc)
+	}
+	return services, nil
+}
+
+func (m Model) loadDeployments(ctx context.Context, namespace string) ([]models.DeploymentInfo, error) {
+	deploymentList, err := m.client.GetDeployments(ctx, namespace)
+	if err != nil {
+		return nil, err
+	}
+	deployments := make([]models.DeploymentInfo, len(deploymentList.Items))
+	for i, dep := range deploymentList.Items {
+		deployments[i] = models.NewDeploymentInfo(&dep)
+	}
+	return deployments, nil
+}
+
+func (m Model) loadStatefulSets(ctx context.Context, namespace string) ([]models.StatefulSetInfo, error) {
+	statefulSetList, err := m.client.GetStatefulSets(ctx, namespace)
+	if err != nil {
+		return nil, err
+	}
+	statefulSets := make([]models.StatefulSetInfo, len(statefulSetList.Items))
+	for i, sts := range statefulSetList.Items {
+		statefulSets[i] = models.NewStatefulSetInfo(&sts)
+	}
+	return statefulSets, nil
+}
+
+func (m Model) loadEvents(ctx context.Context, namespace string) ([]models.EventInfo, error) {
+	eventList, err := m.client.GetEvents(ctx, namespace)
+	if err != nil {
+		return nil, err
+	}
+	events := make([]models.EventInfo, len(eventList.Items))
+	for i, evt := range eventList.Items {
+		events[i] = models.NewEventInfo(&evt)
+	}
+	return events, nil
 }
 
 // loadNamespaces fetches all namespaces
@@ -562,4 +813,216 @@ func minInt(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// loadContainers fetches containers for a pod
+func (m Model) loadContainers(namespace, podName string) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		containers, err := m.client.GetPodContainers(ctx, namespace, podName)
+		if err != nil {
+			return containersLoadedMsg{err: err}
+		}
+
+		return containersLoadedMsg{containers: containers}
+	}
+}
+
+// startLogStream initiates log streaming for a pod container
+func (m Model) startLogStream(containerName string) tea.Cmd {
+	pod := m.resourceList.GetSelectedPod()
+	if pod == nil {
+		return func() tea.Msg {
+			return logStreamErrorMsg{err: fmt.Errorf("no pod selected")}
+		}
+	}
+
+	// streamLogs will handle sending logStreamStartedMsg and starting the read chain
+	return m.streamLogs(pod.Namespace, pod.Name, containerName)
+}
+
+// streamLogs streams logs from a pod container
+func (m Model) streamLogs(namespace, podName, containerName string) tea.Cmd {
+	// Create context with cancel for this stream
+	ctx, cancel := context.WithCancel(context.Background())
+
+	// Get log options
+	opts := models.DefaultLogOptions()
+	opts.Container = containerName
+
+	// Start streaming
+	logChan, errChan := m.client.GetPodLogsStream(ctx, namespace, podName, containerName, opts)
+
+	// Create recursive reader function
+	var readNext func() tea.Cmd
+	readNext = func() tea.Cmd {
+		return func() tea.Msg {
+			select {
+			case entry, ok := <-logChan:
+				if !ok {
+					return logStreamStoppedMsg{}
+				}
+				// Return entry with command for next read
+				return logEntryMsg{
+					entry:   entry,
+					nextCmd: readNext(),
+				}
+			case err, ok := <-errChan:
+				if ok && err != nil {
+					return logStreamErrorMsg{err: err}
+				}
+				return logStreamStoppedMsg{}
+			case <-ctx.Done():
+				return logStreamStoppedMsg{}
+			}
+		}
+	}
+
+	// Return batch: first send started message with cancel, then start reading
+	return tea.Batch(
+		func() tea.Msg {
+			return logStreamStartedMsg{cancel: cancel}
+		},
+		readNext(),
+	)
+}
+
+// loadDescribe loads describe data for the selected resource
+func (m Model) loadDescribe() tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		var data *models.DescribeData
+		var yaml, json string
+		var err error
+
+		resourceType := components.ResourceType(m.tabs.GetActiveTab())
+
+		switch resourceType {
+		case components.ResourceTypePod:
+			pod := m.resourceList.GetSelectedPod()
+			if pod != nil {
+				data, err = m.client.DescribePod(ctx, pod.Namespace, pod.Name)
+				if err == nil {
+					yaml, _ = m.client.GetResourceYAML(ctx, "Pod", pod.Namespace, pod.Name)
+					json, _ = m.client.GetResourceJSON(ctx, "Pod", pod.Namespace, pod.Name)
+				}
+			}
+
+		case components.ResourceTypeService:
+			svc := m.resourceList.GetSelectedService()
+			if svc != nil {
+				data, err = m.client.DescribeService(ctx, svc.Namespace, svc.Name)
+				if err == nil {
+					yaml, _ = m.client.GetResourceYAML(ctx, "Service", svc.Namespace, svc.Name)
+					json, _ = m.client.GetResourceJSON(ctx, "Service", svc.Namespace, svc.Name)
+				}
+			}
+
+		case components.ResourceTypeDeployment:
+			dep := m.resourceList.GetSelectedDeployment()
+			if dep != nil {
+				data, err = m.client.DescribeDeployment(ctx, dep.Namespace, dep.Name)
+				if err == nil {
+					yaml, _ = m.client.GetResourceYAML(ctx, "Deployment", dep.Namespace, dep.Name)
+					json, _ = m.client.GetResourceJSON(ctx, "Deployment", dep.Namespace, dep.Name)
+				}
+			}
+
+		case components.ResourceTypeStatefulSet:
+			sts := m.resourceList.GetSelectedStatefulSet()
+			if sts != nil {
+				data, err = m.client.DescribeStatefulSet(ctx, sts.Namespace, sts.Name)
+				if err == nil {
+					yaml, _ = m.client.GetResourceYAML(ctx, "StatefulSet", sts.Namespace, sts.Name)
+					json, _ = m.client.GetResourceJSON(ctx, "StatefulSet", sts.Namespace, sts.Name)
+				}
+			}
+		}
+
+		if err != nil {
+			return errMsg{err: err}
+		}
+
+		return describeLoadedMsg{data: data, yaml: yaml, json: json}
+	}
+}
+
+// handleLogViewerKeys handles key presses in log viewer mode
+func (m Model) handleLogViewerKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.logViewer == nil {
+		return m, nil
+	}
+
+	switch {
+	case key.Matches(msg, m.keyMap.Follow):
+		m.logViewer.ToggleFollow()
+	case key.Matches(msg, m.keyMap.Timestamps):
+		m.logViewer.ToggleTimestamps()
+	case key.Matches(msg, m.keyMap.Search):
+		m.logViewer.SetSearchMode(true)
+	default:
+		// Pass to viewport for scrolling
+		var cmd tea.Cmd
+		m.logViewer, cmd = m.logViewer.Update(msg)
+		return m, cmd
+	}
+
+	return m, nil
+}
+
+// handleDescribeViewerKeys handles key presses in describe viewer mode
+func (m Model) handleDescribeViewerKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch {
+	case key.Matches(msg, m.keyMap.YAML):
+		m.describeViewer.SetFormat(models.FormatYAML)
+	case key.Matches(msg, m.keyMap.JSON):
+		m.describeViewer.SetFormat(models.FormatJSON)
+	case key.Matches(msg, m.keyMap.Describe):
+		m.describeViewer.SetFormat(models.FormatDescribe)
+	default:
+		// Pass to viewport for scrolling
+		var cmd tea.Cmd
+		m.describeViewer, cmd = m.describeViewer.Update(msg)
+		return m, cmd
+	}
+
+	return m, nil
+}
+
+// handleContainerSelectorKeys handles key presses in container selector mode
+func (m Model) handleContainerSelectorKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.containerSelector == nil {
+		return m, nil
+	}
+
+	switch {
+	case key.Matches(msg, m.keyMap.Up):
+		m.containerSelector.MoveUp()
+	case key.Matches(msg, m.keyMap.Down):
+		m.containerSelector.MoveDown()
+	case key.Matches(msg, m.keyMap.Enter):
+		// Get selected container and start log stream
+		containerName := m.containerSelector.GetSelectedContainerName()
+		if containerName != "" {
+			pod := m.resourceList.GetSelectedPod()
+			if pod != nil {
+				// Hide the selector
+				m.containerSelector.Hide()
+				// Create log viewer
+				m.logViewer = components.NewLogViewer(pod.Name, containerName)
+				m.logViewer.SetSize(m.width, m.height-6)
+				m.viewMode = ViewModeLogStream
+				return m, m.startLogStream(containerName)
+			}
+		}
+	case key.Matches(msg, m.keyMap.Back):
+		m.containerSelector.Hide()
+		m.viewMode = m.previousViewMode
+	}
+
+	return m, nil
 }

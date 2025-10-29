@@ -179,6 +179,34 @@ func (d *DetailView) ViewStatefulSet(statefulSet *models.StatefulSetInfo) string
 		Render(content)
 }
 
+// ViewEvent renders event details
+func (d *DetailView) ViewEvent(event *models.EventInfo) string {
+	if event == nil {
+		return d.emptyView("No event selected")
+	}
+
+	// Header, basic info, and message
+	lines := []string{
+		styles.DetailHeaderStyle.Render("Event Details"),
+		"",
+		styles.RenderDetailRow("Type", event.Type),
+		styles.RenderDetailRow("Reason", event.Reason),
+		styles.RenderDetailRow("Object", event.Object),
+		styles.RenderDetailRow("Age", event.FormatAge()),
+		styles.RenderDetailRow("Count", fmt.Sprintf("%d", event.Count)),
+		"",
+		styles.DetailLabelStyle.Render("Message:"),
+		event.Message,
+	}
+
+	content := strings.Join(lines, "\n")
+
+	return styles.BorderStyle.
+		Width(d.width).
+		Height(d.height).
+		Render(content)
+}
+
 // emptyView renders an empty state message
 func (d *DetailView) emptyView(message string) string {
 	return styles.InfoBoxStyle.
