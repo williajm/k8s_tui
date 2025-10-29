@@ -278,3 +278,145 @@ func TestHeader_UpdateAndView(t *testing.T) {
 		}
 	}
 }
+
+func TestHeader_SetConnectionState(t *testing.T) {
+	tests := []struct {
+		name              string
+		state             ConnectionState
+		expectedConnected bool
+		expectedIndicator string
+		expectedStatus    string
+	}{
+		{
+			name:              "Connected state",
+			state:             ConnectionStateConnected,
+			expectedConnected: true,
+			expectedIndicator: "◉",
+			expectedStatus:    "Connected",
+		},
+		{
+			name:              "Connecting state",
+			state:             ConnectionStateConnecting,
+			expectedConnected: true,
+			expectedIndicator: "◌",
+			expectedStatus:    "Connecting...",
+		},
+		{
+			name:              "Reconnecting state",
+			state:             ConnectionStateReconnecting,
+			expectedConnected: true,
+			expectedIndicator: "◎",
+			expectedStatus:    "Reconnecting...",
+		},
+		{
+			name:              "Error state",
+			state:             ConnectionStateError,
+			expectedConnected: false,
+			expectedIndicator: "⊗",
+			expectedStatus:    "Error",
+		},
+		{
+			name:              "Disconnected state",
+			state:             ConnectionStateDisconnected,
+			expectedConnected: false,
+			expectedIndicator: "○",
+			expectedStatus:    "Disconnected",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := NewHeader("ctx", "ns", true)
+			h.SetConnectionState(tt.state)
+
+			// Check connected field
+			if h.connected != tt.expectedConnected {
+				t.Errorf("Expected connected=%v, got %v", tt.expectedConnected, h.connected)
+			}
+
+			// Check state field
+			if h.connectionState != tt.state {
+				t.Errorf("Expected connectionState=%v, got %v", tt.state, h.connectionState)
+			}
+
+			// Check view rendering
+			view := h.View()
+			if !strings.Contains(view, tt.expectedIndicator) {
+				t.Errorf("Expected indicator %q in view", tt.expectedIndicator)
+			}
+			if !strings.Contains(view, tt.expectedStatus) {
+				t.Errorf("Expected status %q in view", tt.expectedStatus)
+			}
+		})
+	}
+}
+
+func TestHeader_ConnectionStateTransitions(t *testing.T) {
+	h := NewHeader("ctx", "ns", true)
+
+	// Test transition from Connected to Reconnecting
+	h.SetConnectionState(ConnectionStateConnected)
+	if h.connectionState != ConnectionStateConnected {
+		t.Errorf("Expected ConnectionStateConnected, got %v", h.connectionState)
+	}
+
+	h.SetConnectionState(ConnectionStateReconnecting)
+	if h.connectionState != ConnectionStateReconnecting {
+		t.Errorf("Expected ConnectionStateReconnecting, got %v", h.connectionState)
+	}
+	if !h.connected {
+		t.Error("Expected connected=true for reconnecting state")
+	}
+
+	// Test transition to Error
+	h.SetConnectionState(ConnectionStateError)
+	if h.connectionState != ConnectionStateError {
+		t.Errorf("Expected ConnectionStateError, got %v", h.connectionState)
+	}
+	if h.connected {
+		t.Error("Expected connected=false for error state")
+	}
+
+	// Test recovery to Connecting
+	h.SetConnectionState(ConnectionStateConnecting)
+	if h.connectionState != ConnectionStateConnecting {
+		t.Errorf("Expected ConnectionStateConnecting, got %v", h.connectionState)
+	}
+	if !h.connected {
+		t.Error("Expected connected=true for connecting state")
+	}
+}
+
+func TestHeader_AllConnectionStatesRender(t *testing.T) {
+	// Ensure all connection states render without panicking
+	states := []ConnectionState{
+		ConnectionStateConnected,
+		ConnectionStateConnecting,
+		ConnectionStateReconnecting,
+		ConnectionStateError,
+		ConnectionStateDisconnected,
+	}
+
+	for _, state := range states {
+		t.Run(string(state), func(t *testing.T) {
+			h := NewHeader("ctx", "ns", true)
+			h.SetConnectionState(state)
+
+			view := h.View()
+			if view == "" {
+				t.Error("View() returned empty string")
+			}
+
+			// Check that view contains expected elements
+			if !strings.Contains(view, "K8S-TUI") {
+				t.Error("View missing K8S-TUI title")
+			}
+			if !strings.Contains(view, "Context: ctx") {
+				t.Error("View missing context")
+			}
+			if !strings.Contains(view, "NS: ns") {
+				t.Error("View missing namespace")
+			}
+		})
+	}
+}

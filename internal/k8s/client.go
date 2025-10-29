@@ -18,7 +18,7 @@ import (
 
 // Client wraps the Kubernetes clientset with additional context
 type Client struct {
-	clientset      *kubernetes.Clientset
+	clientset      kubernetes.Interface
 	config         *rest.Config
 	namespace      string
 	currentContext string
@@ -196,7 +196,7 @@ func (c *Client) TestConnection(parentCtx context.Context) error {
 	ctx, cancel := context.WithTimeout(parentCtx, 5*time.Second)
 	defer cancel()
 
-	_, err := c.clientset.ServerVersion()
+	_, err := c.clientset.Discovery().ServerVersion()
 	if err != nil {
 		return fmt.Errorf("failed to connect to cluster: %w", err)
 	}

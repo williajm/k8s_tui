@@ -7,21 +7,38 @@ import (
 	"github.com/williajm/k8s-tui/internal/ui/styles"
 )
 
+// ConnectionState represents the current connection state
+type ConnectionState string
+
+const (
+	ConnectionStateDisconnected ConnectionState = "Disconnected"
+	ConnectionStateConnecting   ConnectionState = "Connecting"
+	ConnectionStateConnected    ConnectionState = "Connected"
+	ConnectionStateReconnecting ConnectionState = "Reconnecting"
+	ConnectionStateError        ConnectionState = "Error"
+)
+
 // Header represents the application header
 type Header struct {
-	context   string
-	namespace string
-	connected bool
-	width     int
+	context         string
+	namespace       string
+	connected       bool
+	connectionState ConnectionState
+	width           int
 }
 
 // NewHeader creates a new header component
 func NewHeader(context, namespace string, connected bool) *Header {
+	state := ConnectionStateConnected
+	if !connected {
+		state = ConnectionStateDisconnected
+	}
 	return &Header{
-		context:   context,
-		namespace: namespace,
-		connected: connected,
-		width:     80,
+		context:         context,
+		namespace:       namespace,
+		connected:       connected,
+		connectionState: state,
+		width:           80,
 	}
 }
 
@@ -38,6 +55,17 @@ func (h *Header) SetNamespace(namespace string) {
 // SetConnected updates the connection status
 func (h *Header) SetConnected(connected bool) {
 	h.connected = connected
+	if connected {
+		h.connectionState = ConnectionStateConnected
+	} else {
+		h.connectionState = ConnectionStateDisconnected
+	}
+}
+
+// SetConnectionState updates the connection state with more detail
+func (h *Header) SetConnectionState(state ConnectionState) {
+	h.connectionState = state
+	h.connected = (state == ConnectionStateConnected || state == ConnectionStateConnecting || state == ConnectionStateReconnecting)
 }
 
 // SetWidth sets the width of the header
@@ -47,12 +75,29 @@ func (h *Header) SetWidth(width int) {
 
 // View renders the header
 func (h *Header) View() string {
-	// Create connection indicator
-	connIndicator := "◉"
-	connStatus := "Connected"
-	connStyle := styles.StatusRunningStyle
+	// Create connection indicator based on state
+	var connIndicator string
+	var connStatus string
+	var connStyle lipgloss.Style
 
-	if !h.connected {
+	switch h.connectionState {
+	case ConnectionStateConnected:
+		connIndicator = "◉"
+		connStatus = "Connected"
+		connStyle = styles.StatusRunningStyle
+	case ConnectionStateConnecting:
+		connIndicator = "◌"
+		connStatus = "Connecting..."
+		connStyle = styles.StatusPendingStyle
+	case ConnectionStateReconnecting:
+		connIndicator = "◎"
+		connStatus = "Reconnecting..."
+		connStyle = styles.StatusUnknownStyle
+	case ConnectionStateError:
+		connIndicator = "⊗"
+		connStatus = "Error"
+		connStyle = styles.StatusErrorStyle
+	default: // ConnectionStateDisconnected
 		connIndicator = "○"
 		connStatus = "Disconnected"
 		connStyle = styles.StatusErrorStyle
