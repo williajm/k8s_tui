@@ -132,6 +132,13 @@ func TestPodInfo_GetStatusSymbol(t *testing.T) {
 			want:       "◌",
 		},
 		{
+			name:       "not ready",
+			status:     "NotReady",
+			ready:      "1/2",
+			containers: 2,
+			want:       "◑",
+		},
+		{
 			name:       "unknown",
 			status:     "Unknown",
 			ready:      "0/1",

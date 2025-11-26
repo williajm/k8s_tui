@@ -139,7 +139,7 @@ func (p *PodInfo) GetStatusSymbol() string {
 		return "◐" // Half circle for pending/creating
 	case strings.Contains(p.Status, "Terminating"):
 		return "◌" // Dotted circle for terminating
-	case p.Status == "Running": // Running but not all containers ready
+	case p.Status == "Running" || p.Status == "NotReady": // Running but not all containers ready
 		return "◑" // Partial circle for partially ready
 	default:
 		return "?" // Question mark for unknown
