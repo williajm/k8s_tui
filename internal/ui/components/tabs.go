@@ -22,11 +22,11 @@ type Tabs struct {
 func NewTabs() *Tabs {
 	return &Tabs{
 		tabs: []Tab{
-			{Title: "Pods", ID: 0},
-			{Title: "Services", ID: 1},
-			{Title: "Deployments", ID: 2},
-			{Title: "StatefulSets", ID: 3},
-			{Title: "Events", ID: 4},
+			{Title: "⬡ Pods", ID: 0},
+			{Title: "◈ Services", ID: 1},
+			{Title: "⧉ Deployments", ID: 2},
+			{Title: "▦ StatefulSets", ID: 3},
+			{Title: "⚡ Events", ID: 4},
 		},
 		activeTab: 0,
 		width:     80,

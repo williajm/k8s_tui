@@ -45,19 +45,19 @@ type ColorScheme struct {
 //nolint:dupl // Theme definitions intentionally have similar structure with different values
 func DarkColorScheme() ColorScheme {
 	return ColorScheme{
-		Primary:    lipgloss.Color("#00ADD8"), // Kubernetes blue
-		Secondary:  lipgloss.Color("#326CE5"), // Darker blue
-		Accent:     lipgloss.Color("#FFA500"), // Orange
-		Success:    lipgloss.Color("#00C853"), // Green
-		Warning:    lipgloss.Color("#FFC107"), // Yellow
-		Error:      lipgloss.Color("#F44336"), // Red
-		Info:       lipgloss.Color("#2196F3"), // Blue
-		Border:     lipgloss.Color("#555555"),
-		Text:       lipgloss.Color("#FFFFFF"),
-		TextDim:    lipgloss.Color("#888888"),
-		Background: lipgloss.Color("#1A1A1A"),
-		Selected:   lipgloss.Color("#2A2A2A"),
-		Highlight:  lipgloss.Color("#00ADD8"),
+		Primary:    lipgloss.Color("#326CE5"), // Kubernetes blue
+		Secondary:  lipgloss.Color("#5B8DEF"), // Lighter blue
+		Accent:     lipgloss.Color("#FFCC00"), // Bright yellow/gold
+		Success:    lipgloss.Color("#50FA7B"), // Bright green (Dracula-inspired)
+		Warning:    lipgloss.Color("#FFB86C"), // Orange (Dracula-inspired)
+		Error:      lipgloss.Color("#FF5555"), // Red (Dracula-inspired)
+		Info:       lipgloss.Color("#8BE9FD"), // Cyan (Dracula-inspired)
+		Border:     lipgloss.Color("#6272A4"), // Muted blue-gray
+		Text:       lipgloss.Color("#F8F8F2"), // Off-white
+		TextDim:    lipgloss.Color("#6272A4"), // Muted blue-gray
+		Background: lipgloss.Color("#282A36"), // Dark purple-gray
+		Selected:   lipgloss.Color("#44475A"), // Lighter purple-gray
+		Highlight:  lipgloss.Color("#BD93F9"), // Purple (Dracula-inspired)
 	}
 }
 
@@ -66,19 +66,19 @@ func DarkColorScheme() ColorScheme {
 //nolint:dupl // Theme definitions intentionally have similar structure with different values
 func LightColorScheme() ColorScheme {
 	return ColorScheme{
-		Primary:    lipgloss.Color("#0066CC"), // Darker blue for light background
-		Secondary:  lipgloss.Color("#0052A3"), // Even darker blue
-		Accent:     lipgloss.Color("#FF8C00"), // Dark orange
-		Success:    lipgloss.Color("#00A040"), // Darker green
-		Warning:    lipgloss.Color("#F57C00"), // Darker yellow/orange
-		Error:      lipgloss.Color("#D32F2F"), // Darker red
-		Info:       lipgloss.Color("#1976D2"), // Darker blue
-		Border:     lipgloss.Color("#CCCCCC"),
-		Text:       lipgloss.Color("#000000"),
-		TextDim:    lipgloss.Color("#666666"),
-		Background: lipgloss.Color("#FFFFFF"),
-		Selected:   lipgloss.Color("#E0E0E0"),
-		Highlight:  lipgloss.Color("#0066CC"),
+		Primary:    lipgloss.Color("#326CE5"), // Kubernetes blue
+		Secondary:  lipgloss.Color("#1A4FC9"), // Darker blue
+		Accent:     lipgloss.Color("#B45309"), // Amber/brown
+		Success:    lipgloss.Color("#16A34A"), // Green
+		Warning:    lipgloss.Color("#EA580C"), // Orange
+		Error:      lipgloss.Color("#DC2626"), // Red
+		Info:       lipgloss.Color("#0891B2"), // Cyan
+		Border:     lipgloss.Color("#CBD5E1"), // Light slate
+		Text:       lipgloss.Color("#1E293B"), // Dark slate
+		TextDim:    lipgloss.Color("#64748B"), // Slate
+		Background: lipgloss.Color("#F8FAFC"), // Very light gray
+		Selected:   lipgloss.Color("#E2E8F0"), // Light slate
+		Highlight:  lipgloss.Color("#7C3AED"), // Purple
 	}
 }
 

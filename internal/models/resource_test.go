@@ -94,49 +94,49 @@ func TestPodInfo_GetStatusSymbol(t *testing.T) {
 			status:     "Running",
 			ready:      "1/1",
 			containers: 1,
-			want:       "✓",
+			want:       "●",
 		},
 		{
 			name:       "succeeded",
 			status:     "Succeeded",
 			ready:      "0/1",
 			containers: 1,
-			want:       "✓",
+			want:       "✔",
 		},
 		{
 			name:       "failed",
 			status:     "Failed",
 			ready:      "0/1",
 			containers: 1,
-			want:       "✗",
+			want:       "✖",
 		},
 		{
 			name:       "error",
 			status:     "Error",
 			ready:      "0/1",
 			containers: 1,
-			want:       "✗",
+			want:       "✖",
 		},
 		{
 			name:       "pending",
 			status:     "Pending",
 			ready:      "0/1",
 			containers: 1,
-			want:       "○",
+			want:       "◐",
 		},
 		{
 			name:       "terminating",
 			status:     "Terminating",
 			ready:      "0/1",
 			containers: 1,
-			want:       "⊗",
+			want:       "◌",
 		},
 		{
 			name:       "unknown",
 			status:     "Unknown",
 			ready:      "0/1",
 			containers: 1,
-			want:       "⚠",
+			want:       "?",
 		},
 	}
 
@@ -416,7 +416,7 @@ func TestServiceInfo_GetStatusSymbol(t *testing.T) {
 				Type:       "ClusterIP",
 				ExternalIP: "<none>",
 			},
-			want: "✓",
+			want: "●",
 		},
 		{
 			name: "LoadBalancer with external IP",
@@ -424,7 +424,7 @@ func TestServiceInfo_GetStatusSymbol(t *testing.T) {
 				Type:       "LoadBalancer",
 				ExternalIP: "203.0.113.1",
 			},
-			want: "✓",
+			want: "●",
 		},
 		{
 			name: "LoadBalancer pending external IP",
@@ -432,7 +432,7 @@ func TestServiceInfo_GetStatusSymbol(t *testing.T) {
 				Type:       "LoadBalancer",
 				ExternalIP: "<none>",
 			},
-			want: "○",
+			want: "◐",
 		},
 	}
 
@@ -563,7 +563,7 @@ func TestDeploymentInfo_GetStatusSymbol(t *testing.T) {
 				Available: 3,
 				UpToDate:  3,
 			},
-			want: "✓",
+			want: "●",
 		},
 		{
 			name: "partially ready",
@@ -572,7 +572,7 @@ func TestDeploymentInfo_GetStatusSymbol(t *testing.T) {
 				Available: 1,
 				UpToDate:  3,
 			},
-			want: "○",
+			want: "◑",
 		},
 		{
 			name: "not available",
@@ -581,7 +581,7 @@ func TestDeploymentInfo_GetStatusSymbol(t *testing.T) {
 				Available: 0,
 				UpToDate:  0,
 			},
-			want: "✗",
+			want: "✖",
 		},
 	}
 
@@ -747,7 +747,7 @@ func TestStatefulSetInfo_GetStatusSymbol(t *testing.T) {
 					},
 				},
 			},
-			want: "✓",
+			want: "●",
 		},
 		{
 			name: "partially ready",
@@ -759,7 +759,7 @@ func TestStatefulSetInfo_GetStatusSymbol(t *testing.T) {
 					},
 				},
 			},
-			want: "○",
+			want: "◑",
 		},
 		{
 			name: "not ready",
@@ -771,7 +771,7 @@ func TestStatefulSetInfo_GetStatusSymbol(t *testing.T) {
 					},
 				},
 			},
-			want: "✗",
+			want: "✖",
 		},
 	}
 
