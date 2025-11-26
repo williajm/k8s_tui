@@ -126,17 +126,23 @@ func formatAge(timestamp metav1.Time) string {
 func (p *PodInfo) GetStatusSymbol() string {
 	switch {
 	case p.Status == "Running" && p.Ready == fmt.Sprintf("%d/%d", len(p.Containers), len(p.Containers)):
-		return "✓"
+		return "●" // Solid circle for healthy running
 	case p.Status == "Succeeded":
-		return "✓"
+		return "✔" // Check mark for completed
+	case strings.Contains(p.Status, "CrashLoopBackOff"):
+		return "↻" // Cycle for crash loop
 	case strings.Contains(p.Status, "Error") || strings.Contains(p.Status, "Failed"):
-		return "✗"
-	case strings.Contains(p.Status, "Pending") || strings.Contains(p.Status, "Creating"):
-		return "○"
+		return "✖" // X for error/failed
+	case strings.Contains(p.Status, "ImagePullBackOff") || strings.Contains(p.Status, "ErrImagePull"):
+		return "⬇" // Down arrow for image pull issues
+	case strings.Contains(p.Status, "Pending") || strings.Contains(p.Status, "Creating") || strings.Contains(p.Status, "ContainerCreating"):
+		return "◐" // Half circle for pending/creating
 	case strings.Contains(p.Status, "Terminating"):
-		return "⊗"
+		return "◌" // Dotted circle for terminating
+	case p.Status == "Running" || p.Status == "NotReady": // Running but not all containers ready
+		return "◑" // Partial circle for partially ready
 	default:
-		return "⚠"
+		return "?" // Question mark for unknown
 	}
 }
 
@@ -213,9 +219,9 @@ func NewServiceInfo(service *corev1.Service) ServiceInfo {
 func (s *ServiceInfo) GetStatusSymbol() string {
 	// Services don't have a running status like pods, so we indicate if they have endpoints
 	if s.Type == "LoadBalancer" && s.ExternalIP == "<none>" {
-		return "○" // Pending external IP
+		return "◐" // Pending external IP
 	}
-	return "✓" // Service exists and is configured
+	return "●" // Service exists and is configured
 }
 
 // DeploymentInfo represents simplified deployment information for display
@@ -258,12 +264,12 @@ func NewDeploymentInfo(deployment *appsv1.Deployment) DeploymentInfo {
 // GetStatusSymbol returns a visual indicator for deployment status
 func (d *DeploymentInfo) GetStatusSymbol() string {
 	if d.Available == d.Replicas && d.UpToDate == d.Replicas {
-		return "✓"
+		return "●" // Fully healthy
 	}
 	if d.Available == 0 {
-		return "✗"
+		return "✖" // No replicas available
 	}
-	return "○" // Partially ready
+	return "◑" // Partially ready
 }
 
 // IsHealthy returns true if the deployment is fully ready
@@ -307,12 +313,12 @@ func NewStatefulSetInfo(statefulSet *appsv1.StatefulSet) StatefulSetInfo {
 // GetStatusSymbol returns a visual indicator for statefulset status
 func (s *StatefulSetInfo) GetStatusSymbol() string {
 	if s.StatefulSet.Status.ReadyReplicas == s.Replicas {
-		return "✓"
+		return "●" // Fully healthy
 	}
 	if s.StatefulSet.Status.ReadyReplicas == 0 {
-		return "✗"
+		return "✖" // No replicas ready
 	}
-	return "○" // Partially ready
+	return "◑" // Partially ready
 }
 
 // IsHealthy returns true if the statefulset is fully ready

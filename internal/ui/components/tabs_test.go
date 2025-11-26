@@ -23,7 +23,7 @@ func TestNewTabs(t *testing.T) {
 		t.Errorf("NewTabs() has %d tabs, want 5", len(tabs.tabs))
 	}
 
-	expectedTitles := []string{"Pods", "Services", "Deployments", "StatefulSets", "Events"}
+	expectedTitles := []string{"⬡ Pods", "◈ Services", "⧉ Deployments", "▦ StatefulSets", "⚡ Events"}
 	for i, expectedTitle := range expectedTitles {
 		if tabs.tabs[i].Title != expectedTitle {
 			t.Errorf("NewTabs().tabs[%d].Title = %s, want %s", i, tabs.tabs[i].Title, expectedTitle)

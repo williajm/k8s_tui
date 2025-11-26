@@ -4,26 +4,26 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// Theme colors
+// Theme colors (Dracula-inspired for better aesthetics)
 var (
 	// Primary colors
-	ColorPrimary   = lipgloss.Color("#00ADD8") // Kubernetes blue
-	ColorSecondary = lipgloss.Color("#326CE5") // Darker blue
-	ColorAccent    = lipgloss.Color("#FFA500") // Orange
+	ColorPrimary   = lipgloss.Color("#326CE5") // Kubernetes blue
+	ColorSecondary = lipgloss.Color("#5B8DEF") // Lighter blue
+	ColorAccent    = lipgloss.Color("#FFCC00") // Bright yellow/gold
 
 	// Status colors
-	ColorSuccess = lipgloss.Color("#00C853") // Green
-	ColorWarning = lipgloss.Color("#FFC107") // Yellow
-	ColorError   = lipgloss.Color("#F44336") // Red
-	ColorInfo    = lipgloss.Color("#2196F3") // Blue
+	ColorSuccess = lipgloss.Color("#50FA7B") // Bright green
+	ColorWarning = lipgloss.Color("#FFB86C") // Orange
+	ColorError   = lipgloss.Color("#FF5555") // Red
+	ColorInfo    = lipgloss.Color("#8BE9FD") // Cyan
 
 	// UI colors
-	ColorBorder     = lipgloss.Color("#555555")
-	ColorText       = lipgloss.Color("#FFFFFF")
-	ColorTextDim    = lipgloss.Color("#888888")
-	ColorBackground = lipgloss.Color("#1A1A1A")
-	ColorSelected   = lipgloss.Color("#2A2A2A")
-	ColorHighlight  = lipgloss.Color("#00ADD8")
+	ColorBorder     = lipgloss.Color("#6272A4") // Muted blue-gray
+	ColorText       = lipgloss.Color("#F8F8F2") // Off-white
+	ColorTextDim    = lipgloss.Color("#6272A4") // Muted blue-gray
+	ColorBackground = lipgloss.Color("#282A36") // Dark purple-gray
+	ColorSelected   = lipgloss.Color("#44475A") // Lighter purple-gray
+	ColorHighlight  = lipgloss.Color("#BD93F9") // Purple
 )
 
 // Base styles

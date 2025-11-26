@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -23,6 +24,7 @@ type Client struct {
 	namespace      string
 	currentContext string
 	contexts       []string
+	mu             sync.RWMutex // Protects namespace field for concurrent access
 }
 
 // NewClient creates a new Kubernetes client
@@ -105,9 +107,7 @@ func loadContexts(kubeconfigPath string) ([]string, string, error) {
 
 // GetPods retrieves pods from the specified namespace
 func (c *Client) GetPods(ctx context.Context, namespace string) (*corev1.PodList, error) {
-	if namespace == "" {
-		namespace = c.namespace
-	}
+	namespace = c.resolveNamespace(namespace)
 
 	pods, err := c.clientset.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
@@ -139,9 +139,7 @@ func (c *Client) GetNamespaces(ctx context.Context) (*corev1.NamespaceList, erro
 
 // GetPodLogs retrieves logs for a specific pod
 func (c *Client) GetPodLogs(ctx context.Context, namespace, podName, containerName string, tailLines int64) (string, error) {
-	if namespace == "" {
-		namespace = c.namespace
-	}
+	namespace = c.resolveNamespace(namespace)
 
 	opts := &corev1.PodLogOptions{
 		Container: containerName,
@@ -159,9 +157,7 @@ func (c *Client) GetPodLogs(ctx context.Context, namespace, podName, containerNa
 
 // GetPod retrieves a specific pod
 func (c *Client) GetPod(ctx context.Context, namespace, name string) (*corev1.Pod, error) {
-	if namespace == "" {
-		namespace = c.namespace
-	}
+	namespace = c.resolveNamespace(namespace)
 
 	pod, err := c.clientset.CoreV1().Pods(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
@@ -173,12 +169,24 @@ func (c *Client) GetPod(ctx context.Context, namespace, name string) (*corev1.Po
 
 // SetNamespace changes the current namespace
 func (c *Client) SetNamespace(namespace string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	c.namespace = namespace
 }
 
 // GetNamespace returns the current namespace
 func (c *Client) GetNamespace() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	return c.namespace
+}
+
+// resolveNamespace returns the provided namespace or falls back to the client's default
+func (c *Client) resolveNamespace(namespace string) string {
+	if namespace == "" {
+		return c.GetNamespace()
+	}
+	return namespace
 }
 
 // GetCurrentContext returns the current context
@@ -209,9 +217,7 @@ func (c *Client) TestConnection(parentCtx context.Context) error {
 
 // GetServices retrieves services from the specified namespace
 func (c *Client) GetServices(ctx context.Context, namespace string) (*corev1.ServiceList, error) {
-	if namespace == "" {
-		namespace = c.namespace
-	}
+	namespace = c.resolveNamespace(namespace)
 
 	services, err := c.clientset.CoreV1().Services(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
@@ -233,9 +239,7 @@ func (c *Client) GetAllServices(ctx context.Context) (*corev1.ServiceList, error
 
 // GetService retrieves a specific service
 func (c *Client) GetService(ctx context.Context, namespace, name string) (*corev1.Service, error) {
-	if namespace == "" {
-		namespace = c.namespace
-	}
+	namespace = c.resolveNamespace(namespace)
 
 	service, err := c.clientset.CoreV1().Services(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
@@ -247,9 +251,7 @@ func (c *Client) GetService(ctx context.Context, namespace, name string) (*corev
 
 // GetDeployments retrieves deployments from the specified namespace
 func (c *Client) GetDeployments(ctx context.Context, namespace string) (*appsv1.DeploymentList, error) {
-	if namespace == "" {
-		namespace = c.namespace
-	}
+	namespace = c.resolveNamespace(namespace)
 
 	deployments, err := c.clientset.AppsV1().Deployments(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
@@ -271,9 +273,7 @@ func (c *Client) GetAllDeployments(ctx context.Context) (*appsv1.DeploymentList,
 
 // GetDeployment retrieves a specific deployment
 func (c *Client) GetDeployment(ctx context.Context, namespace, name string) (*appsv1.Deployment, error) {
-	if namespace == "" {
-		namespace = c.namespace
-	}
+	namespace = c.resolveNamespace(namespace)
 
 	deployment, err := c.clientset.AppsV1().Deployments(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
@@ -285,9 +285,7 @@ func (c *Client) GetDeployment(ctx context.Context, namespace, name string) (*ap
 
 // GetStatefulSets retrieves statefulsets from the specified namespace
 func (c *Client) GetStatefulSets(ctx context.Context, namespace string) (*appsv1.StatefulSetList, error) {
-	if namespace == "" {
-		namespace = c.namespace
-	}
+	namespace = c.resolveNamespace(namespace)
 
 	statefulSets, err := c.clientset.AppsV1().StatefulSets(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
@@ -309,9 +307,7 @@ func (c *Client) GetAllStatefulSets(ctx context.Context) (*appsv1.StatefulSetLis
 
 // GetStatefulSet retrieves a specific statefulset
 func (c *Client) GetStatefulSet(ctx context.Context, namespace, name string) (*appsv1.StatefulSet, error) {
-	if namespace == "" {
-		namespace = c.namespace
-	}
+	namespace = c.resolveNamespace(namespace)
 
 	statefulSet, err := c.clientset.AppsV1().StatefulSets(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
@@ -319,4 +315,10 @@ func (c *Client) GetStatefulSet(ctx context.Context, namespace, name string) (*a
 	}
 
 	return statefulSet, nil
+}
+
+// SetClientsetForTesting allows setting the clientset for testing purposes
+// This should only be used in tests
+func (c *Client) SetClientsetForTesting(clientset kubernetes.Interface) {
+	c.clientset = clientset
 }

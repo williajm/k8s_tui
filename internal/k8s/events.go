@@ -10,9 +10,7 @@ import (
 
 // GetEvents retrieves events from the specified namespace
 func (c *Client) GetEvents(ctx context.Context, namespace string) (*corev1.EventList, error) {
-	if namespace == "" {
-		namespace = c.namespace
-	}
+	namespace = c.resolveNamespace(namespace)
 
 	events, err := c.clientset.CoreV1().Events(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
@@ -34,9 +32,7 @@ func (c *Client) GetAllEvents(ctx context.Context) (*corev1.EventList, error) {
 
 // GetEventsForResource retrieves events for a specific resource
 func (c *Client) GetEventsForResource(ctx context.Context, namespace, resourceKind, resourceName string) (*corev1.EventList, error) {
-	if namespace == "" {
-		namespace = c.namespace
-	}
+	namespace = c.resolveNamespace(namespace)
 
 	// Build field selector for the specific resource
 	fieldSelector := fmt.Sprintf("involvedObject.kind=%s,involvedObject.name=%s", resourceKind, resourceName)
@@ -53,9 +49,7 @@ func (c *Client) GetEventsForResource(ctx context.Context, namespace, resourceKi
 
 // GetEventsByType retrieves events filtered by type (Normal, Warning, Error)
 func (c *Client) GetEventsByType(ctx context.Context, namespace, eventType string) (*corev1.EventList, error) {
-	if namespace == "" {
-		namespace = c.namespace
-	}
+	namespace = c.resolveNamespace(namespace)
 
 	fieldSelector := fmt.Sprintf("type=%s", eventType)
 
@@ -71,9 +65,7 @@ func (c *Client) GetEventsByType(ctx context.Context, namespace, eventType strin
 
 // GetRecentEvents retrieves events from the last N minutes
 func (c *Client) GetRecentEvents(ctx context.Context, namespace string, _ int) (*corev1.EventList, error) {
-	if namespace == "" {
-		namespace = c.namespace
-	}
+	namespace = c.resolveNamespace(namespace)
 
 	// Note: This gets all events and filters client-side since
 	// Kubernetes API doesn't support time-based field selectors

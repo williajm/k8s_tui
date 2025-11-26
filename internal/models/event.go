@@ -63,13 +63,13 @@ func NewEventInfo(event *corev1.Event) EventInfo {
 func (e *EventInfo) GetTypeSymbol() string {
 	switch e.Type {
 	case "Normal":
-		return "✓"
+		return "ℹ" // Info symbol for normal events
 	case "Warning":
-		return "⚠"
+		return "⚠" // Warning triangle
 	case "Error":
-		return "✗"
+		return "✖" // X for errors
 	default:
-		return "○"
+		return "•" // Bullet for unknown
 	}
 }
 

@@ -150,7 +150,7 @@ func TestEventInfo_GetTypeSymbol(t *testing.T) {
 		{
 			name:      "normal event",
 			eventType: "Normal",
-			want:      "✓",
+			want:      "ℹ",
 		},
 		{
 			name:      "warning event",
@@ -160,17 +160,17 @@ func TestEventInfo_GetTypeSymbol(t *testing.T) {
 		{
 			name:      "error event",
 			eventType: "Error",
-			want:      "✗",
+			want:      "✖",
 		},
 		{
 			name:      "unknown event type",
 			eventType: "Unknown",
-			want:      "○",
+			want:      "•",
 		},
 		{
 			name:      "empty event type",
 			eventType: "",
-			want:      "○",
+			want:      "•",
 		},
 	}
 

@@ -9,32 +9,32 @@ import (
 func TestDarkColorScheme(t *testing.T) {
 	scheme := DarkColorScheme()
 
-	if scheme.Primary != lipgloss.Color("#00ADD8") {
-		t.Errorf("expected primary color #00ADD8, got %s", scheme.Primary)
+	if scheme.Primary != lipgloss.Color("#326CE5") {
+		t.Errorf("expected primary color #326CE5, got %s", scheme.Primary)
 	}
 
-	if scheme.Background != lipgloss.Color("#1A1A1A") {
-		t.Errorf("expected background color #1A1A1A, got %s", scheme.Background)
+	if scheme.Background != lipgloss.Color("#282A36") {
+		t.Errorf("expected background color #282A36, got %s", scheme.Background)
 	}
 
-	if scheme.Text != lipgloss.Color("#FFFFFF") {
-		t.Errorf("expected text color #FFFFFF, got %s", scheme.Text)
+	if scheme.Text != lipgloss.Color("#F8F8F2") {
+		t.Errorf("expected text color #F8F8F2, got %s", scheme.Text)
 	}
 }
 
 func TestLightColorScheme(t *testing.T) {
 	scheme := LightColorScheme()
 
-	if scheme.Primary != lipgloss.Color("#0066CC") {
-		t.Errorf("expected primary color #0066CC, got %s", scheme.Primary)
+	if scheme.Primary != lipgloss.Color("#326CE5") {
+		t.Errorf("expected primary color #326CE5, got %s", scheme.Primary)
 	}
 
-	if scheme.Background != lipgloss.Color("#FFFFFF") {
-		t.Errorf("expected background color #FFFFFF, got %s", scheme.Background)
+	if scheme.Background != lipgloss.Color("#F8FAFC") {
+		t.Errorf("expected background color #F8FAFC, got %s", scheme.Background)
 	}
 
-	if scheme.Text != lipgloss.Color("#000000") {
-		t.Errorf("expected text color #000000, got %s", scheme.Text)
+	if scheme.Text != lipgloss.Color("#1E293B") {
+		t.Errorf("expected text color #1E293B, got %s", scheme.Text)
 	}
 }
 
