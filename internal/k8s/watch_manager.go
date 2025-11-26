@@ -90,6 +90,9 @@ func (wm *WatchManager) startWatcherLocked(rt ResourceType) error {
 }
 
 // Stop gracefully stops all watchers
+// Note: Channels are not closed to avoid send-on-closed-channel panics from
+// goroutines that may still be running. The channels will be garbage collected
+// when the WatchManager is no longer referenced.
 func (wm *WatchManager) Stop() {
 	wm.mu.Lock()
 	defer wm.mu.Unlock()
@@ -98,6 +101,7 @@ func (wm *WatchManager) Stop() {
 }
 
 // stopAllLocked stops all watchers (must be called with lock held)
+// Note: This does not close channels - use Stop() for full shutdown
 func (wm *WatchManager) stopAllLocked() {
 	// Cancel all watchers
 	if wm.cancelAll != nil {
@@ -144,13 +148,16 @@ func (wm *WatchManager) RestartAll() error {
 		resourceTypes = append(resourceTypes, rt)
 	}
 
+	// Capture ctx while holding lock to avoid TOCTOU race
+	ctx := wm.ctx
+
 	// Stop all watchers
 	wm.stopAllLocked()
 	wm.mu.Unlock()
 
 	// Restart with new namespace
-	if wm.ctx != nil {
-		return wm.Start(wm.ctx, resourceTypes)
+	if ctx != nil {
+		return wm.Start(ctx, resourceTypes)
 	}
 
 	return fmt.Errorf("watch manager not started")

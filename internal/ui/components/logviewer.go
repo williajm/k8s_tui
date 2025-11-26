@@ -255,7 +255,12 @@ func (l *LogViewer) updateViewportContent() {
 
 	for i := 0; i < count; i++ {
 		if startRing.Value != nil {
-			entry := startRing.Value.(models.LogEntry)
+			entry, ok := startRing.Value.(models.LogEntry)
+			if !ok {
+				// Skip invalid entries
+				startRing = startRing.Next()
+				continue
+			}
 
 			// Apply search filter if active
 			if l.searchTerm != "" {

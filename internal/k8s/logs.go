@@ -21,9 +21,7 @@ func (c *Client) GetPodLogsStream(
 	logChan := make(chan models.LogEntry, 1000)
 	errChan := make(chan error, 1)
 
-	if namespace == "" {
-		namespace = c.namespace
-	}
+	namespace = c.resolveNamespace(namespace)
 
 	go func() {
 		defer close(logChan)
@@ -83,9 +81,7 @@ func (c *Client) GetPodLogsStream(
 func (c *Client) GetPodLogsStatic(
 	ctx context.Context, namespace, podName, containerName string, options models.LogOptions,
 ) ([]models.LogEntry, error) {
-	if namespace == "" {
-		namespace = c.namespace
-	}
+	namespace = c.resolveNamespace(namespace)
 
 	podLogOpts := &corev1.PodLogOptions{
 		Container:  containerName,
@@ -150,9 +146,7 @@ func parseLogLine(line, container string, hasTimestamp bool) models.LogEntry {
 
 // GetPodContainers returns a list of container names for a pod
 func (c *Client) GetPodContainers(ctx context.Context, namespace, podName string) ([]string, error) {
-	if namespace == "" {
-		namespace = c.namespace
-	}
+	namespace = c.resolveNamespace(namespace)
 
 	pod, err := c.GetPod(ctx, namespace, podName)
 	if err != nil {
@@ -174,9 +168,7 @@ func (c *Client) GetPodContainers(ctx context.Context, namespace, podName string
 
 // HasPodRestartedRecently checks if a pod has restarted recently
 func (c *Client) HasPodRestartedRecently(ctx context.Context, namespace, podName string) (bool, error) {
-	if namespace == "" {
-		namespace = c.namespace
-	}
+	namespace = c.resolveNamespace(namespace)
 
 	pod, err := c.GetPod(ctx, namespace, podName)
 	if err != nil {

@@ -13,9 +13,7 @@ import (
 
 // GetResourceYAML retrieves a resource and returns it as YAML
 func (c *Client) GetResourceYAML(ctx context.Context, resourceType, namespace, name string) (string, error) {
-	if namespace == "" {
-		namespace = c.namespace
-	}
+	namespace = c.resolveNamespace(namespace)
 
 	var obj interface{}
 	var err error
@@ -47,9 +45,7 @@ func (c *Client) GetResourceYAML(ctx context.Context, resourceType, namespace, n
 
 // GetResourceJSON retrieves a resource and returns it as JSON
 func (c *Client) GetResourceJSON(ctx context.Context, resourceType, namespace, name string) (string, error) {
-	if namespace == "" {
-		namespace = c.namespace
-	}
+	namespace = c.resolveNamespace(namespace)
 
 	var obj interface{}
 	var err error
@@ -81,9 +77,7 @@ func (c *Client) GetResourceJSON(ctx context.Context, resourceType, namespace, n
 
 // DescribePod generates a kubectl-style describe output for a pod
 func (c *Client) DescribePod(ctx context.Context, namespace, name string) (*models.DescribeData, error) {
-	if namespace == "" {
-		namespace = c.namespace
-	}
+	namespace = c.resolveNamespace(namespace)
 
 	pod, err := c.GetPod(ctx, namespace, name)
 	if err != nil {
@@ -138,9 +132,7 @@ func (c *Client) DescribePod(ctx context.Context, namespace, name string) (*mode
 
 // DescribeService generates a kubectl-style describe output for a service
 func (c *Client) DescribeService(ctx context.Context, namespace, name string) (*models.DescribeData, error) {
-	if namespace == "" {
-		namespace = c.namespace
-	}
+	namespace = c.resolveNamespace(namespace)
 
 	service, err := c.GetService(ctx, namespace, name)
 	if err != nil {
@@ -196,9 +188,7 @@ func (c *Client) DescribeService(ctx context.Context, namespace, name string) (*
 
 // DescribeDeployment generates a kubectl-style describe output for a deployment
 func (c *Client) DescribeDeployment(ctx context.Context, namespace, name string) (*models.DescribeData, error) {
-	if namespace == "" {
-		namespace = c.namespace
-	}
+	namespace = c.resolveNamespace(namespace)
 
 	deployment, err := c.GetDeployment(ctx, namespace, name)
 	if err != nil {
@@ -257,9 +247,7 @@ func (c *Client) DescribeDeployment(ctx context.Context, namespace, name string)
 
 // DescribeStatefulSet generates a kubectl-style describe output for a statefulset
 func (c *Client) DescribeStatefulSet(ctx context.Context, namespace, name string) (*models.DescribeData, error) {
-	if namespace == "" {
-		namespace = c.namespace
-	}
+	namespace = c.resolveNamespace(namespace)
 
 	sts, err := c.GetStatefulSet(ctx, namespace, name)
 	if err != nil {
